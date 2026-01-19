@@ -27,6 +27,13 @@ export const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: globalStyles.spacing.xs,
   },
+  timerHint: {
+    ...globalStyles.typography.caption,
+    color: globalStyles.colors.warning,
+    textAlign: 'center',
+    marginTop: globalStyles.spacing.sm,
+    fontStyle: 'italic',
+  },
   serverStatus: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
