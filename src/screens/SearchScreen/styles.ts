@@ -50,4 +50,11 @@ export const styles = StyleSheet.create({
     ...globalStyles.typography.caption,
     color: globalStyles.colors.secondary,
   },
+  // Новый стиль для контейнера кнопки "Продолжить"
+  continueButtonContainer: {
+    marginTop: globalStyles.spacing.max,
+    marginBottom: globalStyles.spacing.lg,
+    alignItems: 'center' as const,
+    zIndex: 5
+  },
 });

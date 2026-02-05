@@ -16,6 +16,7 @@ export const globalStyles = {
     md: 16,
     lg: 24,
     xl: 32,
+    max: 50
   },
   borderRadius: {
     small: 8,

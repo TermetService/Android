@@ -24,14 +24,46 @@ export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
     return null;
   }
 
-  if (!result.success) {
+  if (result.success) {
+    // Если from: 'box' показываем специальное сообщение
+    if (result.from === 'box') {
+      return (
+        <View style={styles.container}>
+          <View style={styles.successContainer}>
+            <View style={styles.row}>
+              <Text style={styles.icon}>📦</Text>
+              <Text style={[styles.text, styles.successText]}>
+                Найдена коробка №{result.boxNumber}
+              </Text>
+            </View>
+            {result.type && (
+              <View style={[styles.row, styles.typeRow]}>
+                <Text style={styles.typeText}>
+                  Этикетка: {result.type}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      );
+    }
+
+    // Обычный успех для from: 'code'
     return (
       <View style={styles.container}>
-        <View style={styles.errorContainer}>
+        <View style={styles.successContainer}>
           <View style={styles.row}>
-            <Text style={styles.icon}>❌</Text>
-            <Text style={[styles.text, styles.errorText]}>Код не найден</Text>
+            <Text style={styles.icon}>✅</Text>
+            <Text style={[styles.text, styles.successText]}>
+              Найдено в: коробка №{result.boxNumber}
+            </Text>
           </View>
+          {result.type && (
+            <View style={[styles.row, styles.typeRow]}>
+              <Text style={styles.icon}>🎯</Text>
+              <Text style={styles.typeText}>Тип: {result.type}</Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -46,7 +78,7 @@ export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
             Найдено в: коробка №{result.boxNumber}
           </Text>
         </View>
-        
+
         {result.type && (
           <View style={[styles.row, styles.typeRow]}>
             <Text style={styles.icon}>🎯</Text>
