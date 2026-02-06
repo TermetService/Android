@@ -1,3 +1,4 @@
+// src/screens/styles.ts
 import { StyleSheet, Platform } from 'react-native';
 
 export const styles = StyleSheet.create({
@@ -30,19 +31,21 @@ export const styles = StyleSheet.create({
   },
   
   scrollContent: {
+    paddingTop: 40, 
     flexGrow: 1,
   },
   
   content: {
     flex: 1,
+    paddingTop: 40, // Добавим отступ сверху для поля ввода
   },
   
   // Контейнер по центру экрана
   centerContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
+    marginBottom: 30, // Отступ для кнопки действия
   },
   
   // Поле ввода поиска
@@ -70,5 +73,33 @@ export const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     borderColor: '#ddd',
     color: '#999',
+  },
+  
+  // Контейнер для кнопки действия
+  actionButtonContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  
+  // Кнопка действия
+  actionButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    width: '100%',
+    maxWidth: 300,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  
+  actionButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });

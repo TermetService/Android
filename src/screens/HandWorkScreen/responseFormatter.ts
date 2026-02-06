@@ -4,6 +4,9 @@ export interface FormattedResponse {
   title: string;
   message: string;
   type: 'success' | 'error' | 'info';
+  showActionButton?: boolean; // Показывать ли кнопку действия
+  actionButtonText?: string; // Текст на кнопке
+  searchData?: any; // Данные поиска для передачи в действие
 }
 
 /**
@@ -16,6 +19,7 @@ export const formatSearchResponse = (result: SearchResponse): FormattedResponse 
       title: '❌ Не найдено',
       message: result.message,
       type: 'error',
+      showActionButton: false,
     };
   }
   
@@ -38,12 +42,13 @@ export const formatSearchResponse = (result: SearchResponse): FormattedResponse 
       title: '✅ Код найден',
       message,
       type: 'success',
+      showActionButton: false, // Для кода кнопки нет
     };
   }
   
   // Если найдена коробка
   if (result.from === 'box' && result.code) {
-    const { box_number, pallet_number, box_label, pallet_label } = result.code;
+    const { box_number, pallet_number, box_label, pallet_label, id } = result.code;
     let message = `Коробка: ${box_number}`;
 
     if (box_label) {
@@ -60,6 +65,15 @@ export const formatSearchResponse = (result: SearchResponse): FormattedResponse 
       title: '✅ Коробка найдена',
       message,
       type: 'success',
+      showActionButton: true, // Только для коробки показываем кнопку
+      actionButtonText: 'Действия с коробкой',
+      searchData: {
+        type: 'box',
+        boxNumber: box_number,
+        boxLabel: box_label,
+        palletNumber: pallet_number,
+        id: id,
+      },
     };
   }
   
@@ -82,6 +96,7 @@ export const formatSearchResponse = (result: SearchResponse): FormattedResponse 
       title: '✅ Паллета найдена',
       message,
       type: 'success',
+      showActionButton: false, // Для паллеты пока без кнопки
     };
   }
   
@@ -93,6 +108,7 @@ export const formatSearchResponse = (result: SearchResponse): FormattedResponse 
       title: hasError ? '⚠️ Ошибка' : 'ℹ️ Информация',
       message: result.message,
       type: hasError ? 'error' : 'info',
+      showActionButton: false,
     };
   }
   
@@ -101,6 +117,7 @@ export const formatSearchResponse = (result: SearchResponse): FormattedResponse 
     title: '⚠️ Неизвестный ответ',
     message: 'Сервер вернул неизвестный формат данных',
     type: 'error',
+    showActionButton: false,
   };
 };
 
@@ -112,5 +129,6 @@ export const formatNetworkError = (): FormattedResponse => {
     title: '❌ Ошибка соединения',
     message: 'Проверьте подключение к интернету',
     type: 'error',
+    showActionButton: false,
   };
 };

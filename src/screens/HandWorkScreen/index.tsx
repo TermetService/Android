@@ -6,16 +6,21 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
   Text,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { styles } from './styles';
 import { formatSearchResponse, formatNetworkError } from './responseFormatter';
 import { ApiService } from '../../services/api';
+import { ActionsModal } from '../../components/ActionsModal';
 
 export const SearchScreen = () => {
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [formattedResponse, setFormattedResponse] = useState<any>(null);
+  const [showActionButton, setShowActionButton] = useState(false);
+  const [showActionsModal, setShowActionsModal] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
 
@@ -33,15 +38,15 @@ export const SearchScreen = () => {
     if (!trimmedCode) return;
 
     setIsLoading(true);
+    setShowActionButton(false);
+    setFormattedResponse(null);
 
     try {
-      // Отправляем код на поиск
       const result = await ApiService.searchCode(trimmedCode);
-
-      // Форматируем ответ
       const formatted = formatSearchResponse(result);
+      setFormattedResponse(formatted);
+      setShowActionButton(formatted.showActionButton || false);
 
-      // Показываем результат
       Toast.show({
         type: formatted.type,
         text1: formatted.title,
@@ -59,9 +64,7 @@ export const SearchScreen = () => {
       });
 
     } catch (error) {
-      // Ошибка сети
       const formatted = formatNetworkError();
-
       Toast.show({
         type: formatted.type,
         text1: formatted.title,
@@ -75,12 +78,33 @@ export const SearchScreen = () => {
     }
   };
 
+  const handleActionButtonPress = () => {
+    if (formattedResponse?.searchData) {
+      setShowActionsModal(true);
+    }
+  };
+
+  // Коллбек при успешном удалении коробки
+  const handleDeleteSuccess = () => {
+    // Скрываем кнопку действия после удаления
+    setShowActionButton(false);
+    setFormattedResponse(null);
+
+    // Показываем сообщение в Toast
+    Toast.show({
+      type: 'success',
+      text1: '✅ Коробка удалена',
+      text2: 'Коробка успешно удалена из системы',
+      position: 'bottom',
+      visibilityTime: 4000,
+    });
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      {/* Заголовок экрана */}
       <View style={styles.screenHeader}>
         <Text style={styles.screenTitle}>Поиск</Text>
       </View>
@@ -91,7 +115,6 @@ export const SearchScreen = () => {
       >
         <View style={styles.content}>
 
-          {/* Поле ввода по центру */}
           <View style={styles.centerContainer}>
             <TextInput
               ref={inputRef}
@@ -113,8 +136,31 @@ export const SearchScreen = () => {
             />
           </View>
 
+          {showActionButton && formattedResponse && (
+            <View style={styles.actionButtonContainer}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleActionButtonPress}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionButtonText}>
+                  {formattedResponse.actionButtonText || 'Действия с коробкой'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
         </View>
       </ScrollView>
+
+      {formattedResponse?.searchData && (
+        <ActionsModal
+          visible={showActionsModal}
+          onClose={() => setShowActionsModal(false)}
+          searchData={formattedResponse.searchData}
+          onDeleteSuccess={handleDeleteSuccess}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 };

@@ -93,65 +93,6 @@ export class ApiService {
     }
   }
 
-  static async continueWork(): Promise<{
-    success: boolean;
-    message: string;
-    data?: any;
-  }> {
-    try {
-      console.log(`Запрос на продолжение работы`);
-
-      const requestData: any = {};
-
-      // Можно добавить timestamp или другую информацию
-      requestData.timestamp = new Date().toISOString();
-      requestData.deviceInfo = {
-        platform: Platform.OS,
-        // можно добавить другую информацию об устройстве
-      };
-
-      console.log('Данные для continue:', requestData);
-
-      const response = await fetch(`${Config.SERVER_URL}/modbus/continue`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData),
-      });
-
-      const responseText = await response.text();
-      console.log('Ответ continue:', responseText);
-      // Alert.alert(`Error, ${JSON.stringify(responseText)}`);
-      if (!response.ok) {
-        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
-      }
-
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('Сервер вернул пустой ответ');
-      }
-
-      const result = JSON.parse(responseText);
-
-      // Разные форматы ответа от сервера
-      return {
-        success: result.success === true ||
-          result.status === 'success' ||
-          result.message?.toLowerCase().includes('успех'),
-        message: result.message || 'Операция выполнена',
-        data: result
-      };
-
-    } catch (error) {
-      console.error('Ошибка continue:', error);
-      return {
-        success: false,
-        message: `Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
-      };
-    }
-  }
-
   static async addCodeToBox(code: string, boxNumber: number) {
     try {
       console.log(`Добавление кода ${code} в коробку ${boxNumber}`);
@@ -225,6 +166,48 @@ export class ApiService {
 
     } catch (error) {
       console.error('Ошибка удаления кода:', error);
+
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка'
+      };
+    }
+  }
+
+  static async deleteBox(boxNumber: number) {
+    try {
+      console.log(`Удаление коробки: ${boxNumber}`);
+
+      const response = await fetch(`${Config.SERVER_URL}/code/deleteBox`, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ boxNumber }), // Только код
+      });
+
+      Alert.alert('------------------responseText', `${response}`);
+      const responseText = await response.text();
+
+      // Простая проверка - если ответ "Код успешно удален", то успех
+      const isSuccess = responseText === 'Короб успешно удален';
+
+      console.log('Ответ от сервера:', responseText);
+
+
+      if (!response.ok || !isSuccess) {
+        throw new Error(responseText || `Ошибка HTTP: ${response.status}`);
+      }
+
+      return {
+        success: true,
+        message: responseText,
+        data: { boxNumber }
+      };
+
+    } catch (error) {
+      console.error('Ошибка удаления коробки:', error);
 
       return {
         success: false,
