@@ -3,9 +3,10 @@ import {
   Alert,
   Platform
 } from 'react-native';
+import { SearchFrom, SearchResponse } from './types';
 
 export class ApiService {
-  static async searchCode(query: string) {
+  static async searchCode(query: string): Promise<SearchResponse> {
     try {
       console.log(`Поиск: ${query} на ${Config.SERVER_URL}/code/search`);
 
@@ -18,26 +19,21 @@ export class ApiService {
         body: JSON.stringify({ query }),
       });
 
-      // Получаем текст ответа
       const responseText = await response.text();
-      console.log('Текст ответа:', responseText);
-      // Alert.alert('search debug---text', `Response: ${responseText}`);
+      console.log('Текст ответа поиска:', responseText);
 
       if (!response.ok) {
         throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
       }
 
-      // Проверяем, не пустой ли ответ
       if (!responseText || responseText.trim() === '') {
         throw new Error('Сервер вернул пустой ответ');
       }
 
-      // Парсим JSON только если есть данные
       return JSON.parse(responseText);
 
     } catch (error) {
       console.error('Ошибка поиска:', error);
-      // Возвращаем стандартный объект ошибки
       return {
         message: `Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
       };

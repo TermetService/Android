@@ -17,9 +17,8 @@ import { AddToBoxModal } from '../../components/AddToBoxModal';
 import { useModalHandlers } from './hooks/useModalHandlers';
 import { useContinueHandler } from './hooks/useContinueHandler';
 import { SearchButtons } from './components/SearchButtons';
-import { ContinueButton } from './components/ContinueButton';
 
-export const SearchScreen = () => {
+export const SearchScreen2 = () => {
   const searchLogic = useSearchLogic();
 
   const query = searchLogic.query;
@@ -55,14 +54,7 @@ export const SearchScreen = () => {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
-    >
-      {/* Кнопка "Продолжить" выше поля поиска */}
-      <View style={styles.continueButtonContainer}>
-        <ContinueButton
-          onPress={continueHandler.handleContinue}
-          disabled={loading}
-        />
-      </View>
+    >      
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -73,9 +65,7 @@ export const SearchScreen = () => {
             Сервер: {serverUrl}
           </Text>
         </View>
-
-
-
+        
         <AutoSearchInput
           value={query}
           onChangeText={handleQueryChange}
