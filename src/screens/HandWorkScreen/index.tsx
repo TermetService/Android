@@ -13,21 +13,20 @@ import {
 } from 'react-native';
 import { styles } from './styles';
 import { ApiService } from '../../services/api';
-import Toast from 'react-native-toast-message';
+import { CustomAlert } from '../../components/CustomAlert';
 
 export const HandWorkScreen = () => {
   const [showManualModal, setShowManualModal] = useState(false);
 
-
   const startHandWork = async () => {
-    setShowManualModal(true)
+    setShowManualModal(true);
     await ApiService.startPause();
-  }
+  };
 
   const stopHandWork = async () => {
-    setShowManualModal(false)
-    await ApiService.continuedWork()
-  }
+    setShowManualModal(false);
+    await ApiService.continuedWork();
+  };
 
   // Функция для подтверждения начала ручной работы
   const handleStartManualWork = () => {
@@ -93,6 +92,13 @@ interface ManualWorkModalProps {
 
 const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClose }) => {
   const [code, setCode] = useState('');
+  const [showCustomAlert, setShowCustomAlert] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    title: '',
+    message: '',
+    type: 'success' as 'success' | 'error',
+  });
+  
   const inputRef = useRef<TextInput>(null);
 
   // Автофокус при открытии модального окна
@@ -105,59 +111,50 @@ const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClose }) =
     }
   }, [visible]);
 
-  const a = () => {
+  const resetInput = () => {
     // Очищаем поле ввода после алерта
     setCode('');
     // Возвращаем фокус на поле ввода
     setTimeout(() => inputRef.current?.focus(), 100);
-  }
+  };
 
   // Обработка отправки кода
   const handleSubmit = async () => {
     const trimmedCode = code.trim();
     if (!trimmedCode) return;
 
-    // Показываем алерт с введенным кодом    
-    const result = await ApiService.handSave(trimmedCode);
-    // console.log('++++++++++', result);
-
-
-    const handleSaveResult = () => {
+    try {
+      const result = await ApiService.handSave(trimmedCode);
+      
+      // Настраиваем кастомный алерт в зависимости от результата
       if (result.success) {
-        // Успех: показываем Toast на 2 секунды
-        Toast.show({
+        // УСПЕХ: зеленый алерт, авто-закрытие через 2 секунды
+        setAlertConfig({
+          title: '✅ Ручное сохранение кода',
+          message: result.message,
           type: 'success',
-          text1: '✅ Успешно сохранено',
-          text2: result.message,
-          position: 'bottom',
-          visibilityTime: 2000,
-          autoHide: true,
         });
-
-        // Выполняем действие через 2 секунды
-        setTimeout(() => {
-          a();
-        }, 2000);
-
       } else {
-        // Ошибка: показываем Alert (требует ручного закрытия)
-        Alert.alert(
-          '❌ Ошибка сохранения',
-          result.message,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                a();
-              },
-            },
-          ]
-        );
+        // ОШИБКА: оранжевый алерт, ручное закрытие
+        setAlertConfig({
+          title: '⚠️ Ошибка сохранения',
+          message: result.message,
+          type: 'error',
+        });
       }
-    };
-
-    // Вызываем
-    handleSaveResult();
+      
+      // Показываем кастомный алерт
+      setShowCustomAlert(true);
+      
+    } catch (error) {
+      // Ошибка сети или другая ошибка
+      setAlertConfig({
+        title: '❌ Ошибка',
+        message: 'Произошла ошибка при сохранении кода',
+        type: 'error',
+      });
+      setShowCustomAlert(true);
+    }
   };
 
   // Обработка нажатия Enter
@@ -165,6 +162,12 @@ const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClose }) =
     if (event.nativeEvent.key === 'Enter') {
       handleSubmit();
     }
+  };
+
+  // Обработчик закрытия кастомного алерта
+  const handleAlertClose = () => {
+    setShowCustomAlert(false);
+    resetInput();
   };
 
   return (
@@ -203,8 +206,21 @@ const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClose }) =
             returnKeyType="done"
             blurOnSubmit={false}
           />
-
+          
+          <Text style={styles.inputHint}>
+            Введите код и нажмите Enter для отправки
+          </Text>
         </View>
+
+        {/* Кастомный алерт */}
+        <CustomAlert
+          visible={showCustomAlert}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          type={alertConfig.type}
+          onClose={handleAlertClose}
+          autoCloseTime={alertConfig.type === 'success' ? 1000 : undefined}
+        />
       </KeyboardAvoidingView>
     </Modal>
   );
