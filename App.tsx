@@ -2,19 +2,24 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { HandWork2Screen } from './src/screens/HandWork2Screen';
-import { SearchScreen } from './src/screens/HandWorkScreen';
+import { HandWorkScreen } from './src/screens/HandWorkScreen';
+import { SearchScreen } from './src/screens/SearchScreen';
 import { BurgerMenu } from './src/components/BurgerMenu';
 
+enum Pages {
+  Page1 = 'search',
+  Page2 = 'handwork',
+}
+
 const App = () => {
-  const [currentScreen, setCurrentScreen] = useState<'handwork' | 'handwork2'>('handwork');
+  const [currentScreen, setCurrentScreen] = useState<Pages>(Pages.Page1);
 
   const renderScreen = () => {
     switch (currentScreen) {
-      case 'handwork':
+      case Pages.Page1:
         return <SearchScreen />;
-      case 'handwork2':
-        return <HandWork2Screen />;
+      case Pages.Page2:
+        return <HandWorkScreen />;
       default:
         return <SearchScreen />;
     }
@@ -23,13 +28,13 @@ const App = () => {
   const menuItems = [
     {
       id: '1',
-      title: 'Экран 1 (HandWork)',
-      onPress: () => setCurrentScreen('handwork'),
+      title: 'Поиск',
+      onPress: () => setCurrentScreen(Pages.Page1),
     },
     {
       id: '2',
-      title: 'Экран 2 (HandWork2)',
-      onPress: () => setCurrentScreen('handwork2'),
+      title: 'Ручная работа',
+      onPress: () => setCurrentScreen(Pages.Page2),
     },
   ];
 
@@ -37,10 +42,10 @@ const App = () => {
     <>
       {/* Рендерим текущий экран */}
       {renderScreen()}
-      
+
       {/* Бургер-меню всегда поверх экрана */}
       <BurgerMenu menuItems={menuItems} />
-      
+
       {/* Toast поверх всего */}
       <View style={{
         position: 'absolute',

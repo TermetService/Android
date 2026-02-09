@@ -70,17 +70,12 @@ export class ApiService {
       const result = JSON.parse(responseText);
 
       // ОТЛАДКА - посмотрим структуру ответа
-      // Alert.alert('Debug Parsed',
-      //   `message: ${result.message}\n` +
-      //   `isAddCode: ${result.isAddCode}\n` +
-      //   `keys: ${Object.keys(result).join(', ')}`
-      // );
+      // Alert.alert('Debug Parsed---', JSON.stringify(result));
 
       // ИСПРАВЛЕНО: обращаемся к result.isAddCode, а не result.result?.isAddCode
       return {
         success: result.isAddCode === true,  // ← ИЗМЕНЕНИЕ ЗДЕСЬ
         message: result.message,
-        data: result
       };
 
     } catch (error) {
@@ -216,39 +211,48 @@ export class ApiService {
     }
   }
 
-  static async bindLabelToBox(boxLabel: string, boxNumber: number) {
+  static async startPause() {
     try {
-      console.log(`Привязка этикетки ${boxLabel} к коробке ${boxNumber}`);
-      Alert.alert(' Успешно----------', boxLabel,);
-      Alert.alert(' Успешно--------222--', `${boxNumber}`);
+      console.log(`Постановка паузы`);
 
-      const response = await fetch(`${Config.SERVER_URL}/code/bindLabel`, {
+      const response = await fetch(`${Config.SERVER_URL}/monitoring/pause`, {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ boxLabel, boxNumber }),
+        }
       });
 
       const responseText = await response.text();
-      console.log('Ответ привязки:', responseText);
+
+      if (!response.ok) {
+        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
+      }
+    } catch (error) {
+      console.error('Ошибка постановки паузы:', error);
+    }
+  }
+
+  static async continuedWork() {
+    try {
+      console.log(`Снятие паузы`);
+
+      const response = await fetch(`${Config.SERVER_URL}/monitoring/continued`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        }
+      });
+
+      const responseText = await response.text();
 
       if (!response.ok) {
         throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
       }
 
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('Сервер вернул пустой ответ');
-      }
-
-      return JSON.parse(responseText);
     } catch (error) {
-      console.error('Ошибка привязки этикетки:', error);
-      return {
-        success: false,
-        message: `Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
-      };
+      console.error('Ошибка продолжения работы:', error);
     }
   }
 }

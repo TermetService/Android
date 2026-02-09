@@ -1,166 +1,211 @@
-// src/screens/SearchScreen.tsx
+// src/screens/HandWorkScreen.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
-  TextInput,
+  Text,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-  Text,
+  Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
-import Toast from 'react-native-toast-message';
 import { styles } from './styles';
-import { formatSearchResponse, formatNetworkError } from './responseFormatter';
 import { ApiService } from '../../services/api';
-import { ActionsModal } from '../../components/ActionsModal';
+import Toast from 'react-native-toast-message';
 
-export const SearchScreen = () => {
+export const HandWorkScreen = () => {
+  const [showManualModal, setShowManualModal] = useState(false);
+
+
+  const startHandWork = async () => {
+    setShowManualModal(true)
+    await ApiService.startPause();
+  }
+
+  const stopHandWork = async () => {
+    setShowManualModal(false)
+    await ApiService.continuedWork()
+  }
+
+  // Функция для подтверждения начала ручной работы
+  const handleStartManualWork = () => {
+    Alert.alert(
+      'Начать ручную работу',
+      'Вы уверены, что хотите перейти в режим ручной работы?',
+      [
+        {
+          text: 'Отмена',
+          style: 'cancel',
+        },
+        {
+          text: 'Начать',
+          style: 'default',
+          onPress: startHandWork,
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  return (
+    <>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <View style={styles.screenHeader}>
+          <Text style={styles.screenTitle}>Ручная работа</Text>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.centerContainer}>
+            {/* Кнопка "Начать ручную работу" */}
+            <TouchableOpacity
+              style={styles.startButton}
+              onPress={handleStartManualWork}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.startButtonText}>Начать ручную работу</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Модальное окно "Режим ручной работы" */}
+      <ManualWorkModal
+        visible={showManualModal}
+        onClose={stopHandWork}
+      />
+    </>
+  );
+};
+
+// Компонент модального окна ручной работы
+interface ManualWorkModalProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClose }) => {
   const [code, setCode] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [formattedResponse, setFormattedResponse] = useState<any>(null);
-  const [showActionButton, setShowActionButton] = useState(false);
-  const [showActionsModal, setShowActionsModal] = useState(false);
-
   const inputRef = useRef<TextInput>(null);
 
-  // Автофокус при загрузке экрана
+  // Автофокус при открытии модального окна
   useEffect(() => {
-    const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, []);
+    if (visible) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [visible]);
 
-  // Обработка отправки кода при нажатии Enter
+  const a = () => {
+    // Очищаем поле ввода после алерта
+    setCode('');
+    // Возвращаем фокус на поле ввода
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }
+
+  // Обработка отправки кода
   const handleSubmit = async () => {
     const trimmedCode = code.trim();
     if (!trimmedCode) return;
 
-    setIsLoading(true);
-    setShowActionButton(false);
-    setFormattedResponse(null);
+    // Показываем алерт с введенным кодом    
+    const result = await ApiService.handSave(trimmedCode);
+    // console.log('++++++++++', result);
 
-    try {
-      const result = await ApiService.searchCode(trimmedCode);
-      const formatted = formatSearchResponse(result);
-      setFormattedResponse(formatted);
-      setShowActionButton(formatted.showActionButton || false);
 
-      Toast.show({
-        type: formatted.type,
-        text1: formatted.title,
-        text2: formatted.message,
-        position: 'bottom',
-        visibilityTime: 5000,
-        text1Style: {
-          fontSize: 16,
-          fontWeight: 'bold',
-        },
-        text2Style: {
-          fontSize: 14,
-          lineHeight: 18,
-        },
-      });
+    const handleSaveResult = () => {
+      if (result.success) {
+        // Успех: показываем Toast на 2 секунды
+        Toast.show({
+          type: 'success',
+          text1: '✅ Успешно сохранено',
+          text2: result.message,
+          position: 'bottom',
+          visibilityTime: 2000,
+          autoHide: true,
+        });
 
-    } catch (error) {
-      const formatted = formatNetworkError();
-      Toast.show({
-        type: formatted.type,
-        text1: formatted.title,
-        text2: formatted.message,
-        position: 'bottom',
-        visibilityTime: 3000,
-      });
-    } finally {
-      setIsLoading(false);
-      setCode('');
-    }
+        // Выполняем действие через 2 секунды
+        setTimeout(() => {
+          a();
+        }, 2000);
+
+      } else {
+        // Ошибка: показываем Alert (требует ручного закрытия)
+        Alert.alert(
+          '❌ Ошибка сохранения',
+          result.message,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                a();
+              },
+            },
+          ]
+        );
+      }
+    };
+
+    // Вызываем
+    handleSaveResult();
   };
 
-  const handleActionButtonPress = () => {
-    if (formattedResponse?.searchData) {
-      setShowActionsModal(true);
+  // Обработка нажатия Enter
+  const handleKeyPress = (event: any) => {
+    if (event.nativeEvent.key === 'Enter') {
+      handleSubmit();
     }
-  };
-
-  // Коллбек при успешном удалении коробки
-  const handleDeleteSuccess = () => {
-    // Скрываем кнопку действия после удаления
-    setShowActionButton(false);
-    setFormattedResponse(null);
-
-    // Показываем сообщение в Toast
-    Toast.show({
-      type: 'success',
-      text1: '✅ Коробка удалена',
-      text2: 'Коробка успешно удалена из системы',
-      position: 'bottom',
-      visibilityTime: 4000,
-    });
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={onClose}
     >
-      <View style={styles.screenHeader}>
-        <Text style={styles.screenTitle}>Поиск</Text>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalContainer}
       >
-        <View style={styles.content}>
+        {/* Заголовок модального окна */}
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Режим ручной работы</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
 
-          <View style={styles.centerContainer}>
-            <TextInput
-              ref={inputRef}
-              style={[
-                styles.searchInput,
-                isLoading && styles.searchInputDisabled
-              ]}
-              value={code}
-              onChangeText={setCode}
-              onSubmitEditing={handleSubmit}
-              placeholder={isLoading ? "Поиск..." : "Введите код"}
-              placeholderTextColor="#999"
-              autoCapitalize="characters"
-              autoCorrect={false}
-              autoFocus={true}
-              returnKeyType="done"
-              blurOnSubmit={false}
-              editable={!isLoading}
-            />
-          </View>
-
-          {showActionButton && formattedResponse && (
-            <View style={styles.actionButtonContainer}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={handleActionButtonPress}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.actionButtonText}>
-                  {formattedResponse.actionButtonText || 'Действия с коробкой'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+        {/* Основное содержимое - поле ввода по центру */}
+        <View style={styles.modalContent}>
+          <TextInput
+            ref={inputRef}
+            style={styles.manualWorkInput}
+            value={code}
+            onChangeText={setCode}
+            onSubmitEditing={handleSubmit}
+            onKeyPress={handleKeyPress}
+            placeholder="Введите код"
+            placeholderTextColor="#999"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            autoFocus={true}
+            returnKeyType="done"
+            blurOnSubmit={false}
+          />
 
         </View>
-      </ScrollView>
-
-      {formattedResponse?.searchData && (
-        <ActionsModal
-          visible={showActionsModal}
-          onClose={() => setShowActionsModal(false)}
-          searchData={formattedResponse.searchData}
-          onDeleteSuccess={handleDeleteSuccess}
-        />
-      )}
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 };

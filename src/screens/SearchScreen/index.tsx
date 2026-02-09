@@ -1,127 +1,166 @@
-import React, { useState } from 'react';
+// src/screens/SearchScreen.tsx
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
-  Text,
+  TextInput,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
+  Text,
 } from 'react-native';
-import { AutoSearchInput } from '../../components/AutoSearchInput';
-import { SearchResultDisplay } from '../../components/SearchResultDisplay';
-import { CodeActionsModal } from '../../components/CodeActionsModal';
-import { BindLabelModal } from '../../components/BindLabelModal';
-import { Config } from '../../config';
+import Toast from 'react-native-toast-message';
 import { styles } from './styles';
-import { useSearchLogic } from './hooks/useSearchLogic';
-import { AddToBoxModal } from '../../components/AddToBoxModal';
-import { useModalHandlers } from './hooks/useModalHandlers';
-import { useContinueHandler } from './hooks/useContinueHandler';
-import { SearchButtons } from './components/SearchButtons';
+import { formatSearchResponse, formatNetworkError } from './responseFormatter';
+import { ApiService } from '../../services/api';
+import { ActionsModal } from '../../components/ActionsModal';
 
-export const SearchScreen2 = () => {
-  const searchLogic = useSearchLogic();
+export const SearchScreen = () => {
+  const [code, setCode] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [formattedResponse, setFormattedResponse] = useState<any>(null);
+  const [showActionButton, setShowActionButton] = useState(false);
+  const [showActionsModal, setShowActionsModal] = useState(false);
 
-  const query = searchLogic.query;
-  const loading = searchLogic.loading;
-  const searchResult = searchLogic.searchResult;
-  const foundCodeData = searchLogic.foundCodeData;
-  const lastSearchedCode = searchLogic.lastSearchedCode;
-  const showAddButton = searchLogic.showAddButton;
-  const timerActive = searchLogic.timerActive;
-  const handleQueryChange = searchLogic.handleQueryChange;
-  const handleSearch = searchLogic.handleSearch;
+  const inputRef = useRef<TextInput>(null);
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [labelModalVisible, setLabelModalVisible] = useState(false);
-  const [addToBoxModalVisible, setAddToBoxModalVisible] = useState(false);
+  // Автофокус при загрузке экрана
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const modalHandlers = useModalHandlers({
-    lastSearchedCode,
-    foundCodeData,
-    stopTimer: searchLogic.stopTimer,
-    resetSearch: searchLogic.resetSearch,
-    setModalVisible,
-    setLabelModalVisible,
-    setAddToBoxModalVisible,
-  });
+  // Обработка отправки кода при нажатии Enter
+  const handleSubmit = async () => {
+    const trimmedCode = code.trim();
+    if (!trimmedCode) return;
 
-  const continueHandler = useContinueHandler();
+    setIsLoading(true);
+    setShowActionButton(false);
+    setFormattedResponse(null);
 
-  const serverUrl = Config?.SERVER_URL || 'не указан';
-  const shouldShowActions = modalHandlers.shouldShowActions(searchResult, loading, foundCodeData);
+    try {
+      const result = await ApiService.searchCode(trimmedCode);
+      const formatted = formatSearchResponse(result);
+      setFormattedResponse(formatted);
+      setShowActionButton(formatted.showActionButton || false);
+
+      Toast.show({
+        type: formatted.type,
+        text1: formatted.title,
+        text2: formatted.message,
+        position: 'bottom',
+        visibilityTime: 5000,
+        text1Style: {
+          fontSize: 16,
+          fontWeight: 'bold',
+        },
+        text2Style: {
+          fontSize: 14,
+          lineHeight: 18,
+        },
+      });
+
+    } catch (error) {
+      const formatted = formatNetworkError();
+      Toast.show({
+        type: formatted.type,
+        text1: formatted.title,
+        text2: formatted.message,
+        position: 'bottom',
+        visibilityTime: 3000,
+      });
+    } finally {
+      setIsLoading(false);
+      setCode('');
+    }
+  };
+
+  const handleActionButtonPress = () => {
+    if (formattedResponse?.searchData) {
+      setShowActionsModal(true);
+    }
+  };
+
+  // Коллбек при успешном удалении коробки
+  const handleDeleteSuccess = () => {
+    // Скрываем кнопку действия после удаления
+    setShowActionButton(false);
+    setFormattedResponse(null);
+
+    // Показываем сообщение в Toast
+    Toast.show({
+      type: 'success',
+      text1: '✅ Коробка удалена',
+      text2: 'Коробка успешно удалена из системы',
+      position: 'bottom',
+      visibilityTime: 4000,
+    });
+  };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
-    >      
+    >
+      <View style={styles.screenHeader}>
+        <Text style={styles.screenTitle}>Поиск</Text>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>🔍 Поиск кода</Text>
-          <Text style={styles.subtitle}>
-            Сервер: {serverUrl}
-          </Text>
-        </View>
-        
-        <AutoSearchInput
-          value={query}
-          onChangeText={handleQueryChange}
-          onSubmit={handleSearch}
-          loading={loading}
-          placeholder="Введите код и нажмите Enter"
-        />
+        <View style={styles.content}>
 
-        <AddToBoxModal
-          visible={addToBoxModalVisible}
-          onClose={() => setAddToBoxModalVisible(false)}
-          onAddCode={modalHandlers.handleAddToBox}
-          loading={loading}
-          boxNumber={foundCodeData?.code?.box_number}
-        />
+          <View style={styles.centerContainer}>
+            <TextInput
+              ref={inputRef}
+              style={[
+                styles.searchInput,
+                isLoading && styles.searchInputDisabled
+              ]}
+              value={code}
+              onChangeText={setCode}
+              onSubmitEditing={handleSubmit}
+              placeholder={isLoading ? "Поиск..." : "Введите код"}
+              placeholderTextColor="#999"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              autoFocus={true}
+              returnKeyType="done"
+              blurOnSubmit={false}
+              editable={!isLoading}
+            />
+          </View>
 
-        <SearchResultDisplay
-          result={searchResult}
-          loading={loading}
-        />
+          {showActionButton && formattedResponse && (
+            <View style={styles.actionButtonContainer}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleActionButtonPress}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionButtonText}>
+                  {formattedResponse.actionButtonText || 'Действия с коробкой'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-        {/* Остальные кнопки (добавить в упаковку и действия) */}
-        <SearchButtons
-          showAddButton={!!(showAddButton && searchResult && !searchResult.success && !loading)}
-          showActions={shouldShowActions}
-          loading={loading}
-          onAddToPackage={modalHandlers.handleAddToPackage}
-          onOpenActionsModal={() => setModalVisible(true)}
-        />
-
-        <CodeActionsModal
-          visible={modalVisible}
-          onClose={() => setModalVisible(false)}
-          onActionPress={modalHandlers.handleActionPress}
-        />
-
-        <BindLabelModal
-          visible={labelModalVisible}
-          onClose={() => setLabelModalVisible(false)}
-          onBind={modalHandlers.handleBindLabel}
-          loading={loading}
-          boxNumber={foundCodeData?.code?.box_number}
-        />
-
-        <View style={styles.serverStatus}>
-          <View style={[styles.statusIndicator, {
-            backgroundColor: loading ? '#FF9500' :
-              timerActive ? '#FF9500' : '#34C759'
-          }]} />
-          <Text style={styles.statusText}>
-            {loading ? 'Идет поиск...' :
-              timerActive ? 'Таймер активен (60 сек)' :
-                'Готово к поиску'}
-          </Text>
         </View>
       </ScrollView>
+
+      {formattedResponse?.searchData && (
+        <ActionsModal
+          visible={showActionsModal}
+          onClose={() => setShowActionsModal(false)}
+          searchData={formattedResponse.searchData}
+          onDeleteSuccess={handleDeleteSuccess}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 };
