@@ -50,6 +50,8 @@ export const SearchScreen = () => {
 
   const serverUrl = Config?.SERVER_URL || 'не указан';
   const shouldShowActions = modalHandlers.shouldShowActions(searchResult, loading, foundCodeData);
+  console.log('=======================', searchResult);
+
 
   return (
     <KeyboardAvoidingView
@@ -93,13 +95,25 @@ export const SearchScreen = () => {
         />
 
         <SearchResultDisplay
-          result={searchResult}
+          result={searchResult} // Убедитесь, что это searchResult из useSearchLogic
           loading={loading}
         />
 
+        {/* Добавьте отладочный текст */}
+        <Text style={{ color: 'gray', fontSize: 10, textAlign: 'center', marginTop: 4 }}>
+          Debug: success={searchResult?.success?.toString()},
+          boxNumber={searchResult?.boxNumber}
+        </Text>
+
         {/* Остальные кнопки (добавить в упаковку и действия) */}
         <SearchButtons
-          showAddButton={!!(showAddButton && searchResult && !searchResult.success && !loading)}
+          showAddButton={!!(
+            showAddButton &&
+            searchResult &&
+            !searchResult.success &&
+            !loading &&
+            searchResult.from === 'code'  // ДОБАВИТЬ эту проверку
+          )}
           showActions={shouldShowActions}
           loading={loading}
           onAddToPackage={modalHandlers.handleAddToPackage}

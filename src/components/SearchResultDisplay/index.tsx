@@ -3,10 +3,19 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { SearchResultDisplayProps } from './types';
 import { styles } from './styles';
 
+// SearchResultDisplay.tsx
 export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
   result,
   loading = false,
 }) => {
+  // ДОБАВИТЬ отладочный вывод
+  console.log('🔍 SearchResultDisplay получил:', { 
+    result, 
+    loading,
+    success: result?.success,
+    boxNumber: result?.boxNumber
+  });
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -23,6 +32,9 @@ export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
   if (!result) {
     return null;
   }
+
+  // ДОБАВИТЬ проверку
+  console.log('✅ result.success =', result.success);
 
   if (result.success) {
     // Если from: 'box' показываем специальное сообщение
@@ -69,22 +81,28 @@ export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
     );
   }
 
+  // Только если success = false
+  console.log('❌ result.success = false, показываем ошибку');
   return (
     <View style={styles.container}>
-      <View style={styles.successContainer}>
+      <View style={{
+        backgroundColor: '#FFE5E5',
+        borderWidth: 1,
+        borderColor: '#FF3B30',
+        borderRadius: 12,
+        padding: 16,
+        marginTop: 16,
+      }}>
         <View style={styles.row}>
-          <Text style={styles.icon}>✅</Text>
-          <Text style={[styles.text, styles.successText]}>
-            Найдено в: коробка №{result.boxNumber}
+          <Text style={styles.icon}>❌</Text>
+          <Text style={[styles.text, {
+            fontSize: 16,
+            fontWeight: '500',
+            color: '#D70015',
+          }]}>
+            {result.message || 'Код не найден'}
           </Text>
         </View>
-
-        {result.type && (
-          <View style={[styles.row, styles.typeRow]}>
-            <Text style={styles.icon}>🎯</Text>
-            <Text style={styles.typeText}>Тип: {result.type}</Text>
-          </View>
-        )}
       </View>
     </View>
   );

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { ApiService } from '../../../services/api';
+import { Alert } from 'react-native';
 
 export interface SearchResult {
     success: boolean;
@@ -51,19 +52,28 @@ export const useSearchLogic = () => {
     }, [stopTimer]);
 
     // Парсинг ответа сервера
+    // hooks/useSearchLogic.ts
+    // hooks/useSearchLogic.ts
     const parseServerResponse = useCallback((data: any): SearchResult => {
-        if (data.message && data.message.includes('Ошибка')) {
+        console.log('📋 parseServerResponse вход:', data); // ДОБАВИТЬ
+
+        // ВАЖНО: если есть message - это всегда ошибка (пустой ответ или код не найден)
+        if (data.message) {
+            console.log('❌ Обнаружен message:', data.message);
             return {
                 success: false,
-                message: 'Код не найден',
+                message: 'Код не найден', // Всегда показываем это сообщение
+                from: data.from
             };
         }
 
+        // ТОЛЬКО если есть data.code - успех
         if (data.code) {
+            console.log('✅ Обнаружен data.code:', data.code);
             const result: SearchResult = {
                 success: true,
                 boxNumber: data.code.box_number ? parseInt(data.code.box_number.toString(), 10) : undefined,
-                from: data.from || 'code', // Сохраняем from, по умолчанию 'code'
+                from: data.from || 'code',
             };
 
             if (data.code.type) {
@@ -75,15 +85,17 @@ export const useSearchLogic = () => {
             return result;
         }
 
+        // Во всех остальных случаях - ошибка
+        console.log('❌ Ничего не найдено в data');
         return {
             success: false,
             message: 'Код не найден',
         };
     }, []);
 
-    
-
     // Основная функция поиска
+    // hooks/useSearchLogic.ts
+    // hooks/useSearchLogic.ts
     const handleSearch = useCallback(async () => {
         if (!query.trim() || loading) return;
 
@@ -95,7 +107,10 @@ export const useSearchLogic = () => {
 
         try {
             const data = await ApiService.searchCode(query);
+            console.log('📦 Данные от API:', data); // ДОБАВИТЬ
+
             const parsedResult = parseServerResponse(data);
+            console.log('🔍 Парсинг результата:', parsedResult); // ДОБАВИТЬ
 
             setSearchResult(parsedResult);
             setFoundCodeData(data);
@@ -105,6 +120,7 @@ export const useSearchLogic = () => {
                 startTimer();
             }
         } catch (error: any) {
+            console.log('❌ Ошибка в handleSearch:', error); // ДОБАВИТЬ
             const errorResult: SearchResult = {
                 success: false,
                 message: 'Код не найден',

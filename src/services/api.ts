@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 
 export class ApiService {
+  // services/api.ts
+  // services/api.ts
   static async searchCode(query: string) {
     try {
       console.log(`Поиск: ${query} на ${Config.SERVER_URL}/code/search`);
@@ -18,26 +20,37 @@ export class ApiService {
         body: JSON.stringify({ query }),
       });
 
-      // Получаем текст ответа
       const responseText = await response.text();
       console.log('Текст ответа:', responseText);
-      // Alert.alert('search debug---text', `Response: ${responseText}`);
 
       if (!response.ok) {
         throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
       }
 
-      // Проверяем, не пустой ли ответ
+      // Проверяем на пустой ответ
       if (!responseText || responseText.trim() === '') {
-        throw new Error('Сервер вернул пустой ответ');
+        // Пустой ответ - считаем, что код не найден
+        return { message: 'Код не найден' };
       }
 
-      // Парсим JSON только если есть данные
-      return JSON.parse(responseText);
+      // Пытаемся распарсить JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        // Если не парсится - считаем ошибкой
+        throw new Error('Некорректный ответ от сервера');
+      }
+
+      // Если нет code - считаем, что код не найден
+      if (!data.code) {
+        return { message: 'Код не найден', from: data.from };
+      }
+
+      return data;
 
     } catch (error) {
       console.error('Ошибка поиска:', error);
-      // Возвращаем стандартный объект ошибки
       return {
         message: `Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
       };

@@ -13,13 +13,13 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#34C759',
   },
-  errorContainer: {
-    backgroundColor: '#FFEEEE',
-    padding: globalStyles.spacing.lg,
-    borderRadius: globalStyles.borderRadius.medium,
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-  },
+  // errorContainer: {
+  //   backgroundColor: '#FFEEEE',
+  //   padding: globalStyles.spacing.lg,
+  //   borderRadius: globalStyles.borderRadius.medium,
+  //   borderWidth: 1,
+  //   borderColor: '#FF3B30',
+  // },
   loadingContainer: {
     backgroundColor: globalStyles.colors.card,
     padding: globalStyles.spacing.lg,
@@ -44,9 +44,9 @@ export const styles = StyleSheet.create({
   successText: {
     color: '#1C1C1E',
   },
-  errorText: {
-    color: '#1C1C1E',
-  },
+  // errorText: {
+  //   color: '#1C1C1E',
+  // },
   loadingText: {
     color: globalStyles.colors.secondary,
   },
@@ -56,5 +56,19 @@ export const styles = StyleSheet.create({
   typeText: {
     fontSize: 14,
     color: '#666',
+  },
+  errorContainer: {
+    backgroundColor: '#FFE5E5',
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+  },
+
+  errorText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#D70015',
   },
 });
