@@ -5,6 +5,7 @@ import Toast from 'react-native-toast-message';
 import { HandWorkScreen } from './src/screens/HandWorkScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import { BurgerMenu } from './src/components/BurgerMenu';
+import { Header } from './src/components/Header';
 
 enum Pages {
   Page1 = 'search',
@@ -40,6 +41,7 @@ const App = () => {
 
   return (
     <>
+      <Header />
       {/* Рендерим текущий экран */}
       {renderScreen()}
 

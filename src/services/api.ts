@@ -50,14 +50,12 @@ export class ApiService {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, userId: Config.USER_ID }),
       });
 
       const responseText = await response.text();
-      // console.log('Ответ ручного сохранения:', responseText);
-
-      // Для отладки
-      // Alert.alert('Debug Raw', `Response: ${responseText}`);
+      console.log(`Ручное сохранение кода: ----2 ${responseText}`);
+      console.log(`Ручное сохранение кода: ----333 ${response.ok}`);
 
       if (!response.ok) {
         throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
@@ -67,20 +65,76 @@ export class ApiService {
         throw new Error('Сервер вернул пустой ответ');
       }
 
-      const result = JSON.parse(responseText);
+      const responseData = JSON.parse(responseText);
+      console.log(`Ручное сохранение кода: ----парсинг ${JSON.stringify(responseData)}`);
 
-      // ОТЛАДКА - посмотрим структуру ответа
-      // Alert.alert('Debug Parsed---', JSON.stringify(result));
+      // Проверяем структуру ответа - isAddCode находится в result
+      const isAddCode = responseData.result?.isAddCode === true;
 
-      // ИСПРАВЛЕНО: обращаемся к result.isAddCode, а не result.result?.isAddCode
+      // Формируем сообщение для пользователя
+      let message = '';
+      if (isAddCode) {
+        message = `Код сохранен в коробку ${responseData.result?.boxNumber}, паллета ${responseData.result?.palletNumber}`;
+      } else {
+        message = responseData.message || 'Не удалось сохранить код';
+      }
+
       return {
-        success: result.isAddCode === true,  // ← ИЗМЕНЕНИЕ ЗДЕСЬ
-        message: result.message,
+        success: isAddCode,
+        message: message,
+        data: responseData
       };
 
     } catch (error) {
       console.error('Ошибка ручного сохранения:', error);
-      // Alert.alert(`Error, ${JSON.stringify(error)}`);
+      return {
+        success: false,
+        message: `Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
+      };
+    }
+  }
+
+  static async getCounts() {
+    try {
+      console.log(`Получение счетчиков`);
+
+      const response = await fetch(`${Config.SERVER_URL}/code/get-user-counts`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: Config.USER_ID }),
+      });
+
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
+      }
+
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Сервер вернул пустой ответ');
+      }
+
+      const responseData = JSON.parse(responseText).result;
+      console.log(`Получение счетчиков: ----парсинг ${JSON.stringify(responseData)}`);
+
+      // Проверяем структуру ответа - isCounts находится в result
+      const isCounts = responseData.isCounts === true;
+      console.log(`=============message ${responseData.message}`);
+      // Формируем сообщение для пользователя
+      let message = '';
+      if (isCounts) {
+        message = `Счетчики получены`;
+      } else {
+        message = responseData.message || 'Не удалось получить счетчики';
+      }
+
+      return responseData;
+
+    } catch (error) {
+      console.error('Ошибка получения счетчиков:', error);
       return {
         success: false,
         message: `Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
@@ -208,51 +262,6 @@ export class ApiService {
         success: false,
         message: error instanceof Error ? error.message : 'Неизвестная ошибка'
       };
-    }
-  }
-
-  static async startPause() {
-    try {
-      console.log(`Постановка паузы`);
-
-      const response = await fetch(`${Config.SERVER_URL}/monitoring/pause`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        }
-      });
-
-      const responseText = await response.text();
-
-      if (!response.ok) {
-        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
-      }
-    } catch (error) {
-      console.error('Ошибка постановки паузы:', error);
-    }
-  }
-
-  static async continuedWork() {
-    try {
-      console.log(`Снятие паузы`);
-
-      const response = await fetch(`${Config.SERVER_URL}/monitoring/continued`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        }
-      });
-
-      const responseText = await response.text();
-
-      if (!response.ok) {
-        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
-      }
-
-    } catch (error) {
-      console.error('Ошибка продолжения работы:', error);
     }
   }
 }
