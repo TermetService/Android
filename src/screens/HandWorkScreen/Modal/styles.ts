@@ -17,6 +17,34 @@ export const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
+  modalOperatorTitle: {
+    fontSize: 18,
+    color: '#000000',
+    marginLeft: 50
+  },
+  infoContainer: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+
+  serverInfoButton: {
+    marginTop: 4,
+    padding: 2,
+  },
+
+  serverInfoText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'monospace',
+  },
+
+  serverInfoTextOnline: {
+    color: '#4CAF50', // Зеленый для онлайн статуса
+  },
+
+  serverInfoTextOffline: {
+    color: '#F44336', // Красный для офлайн статуса
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',

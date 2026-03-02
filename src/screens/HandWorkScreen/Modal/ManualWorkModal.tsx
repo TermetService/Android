@@ -11,6 +11,7 @@ import { styles } from './styles';
 import React, { useState, useRef, useEffect } from 'react';
 import { ApiService } from '../../../services/api';
 import { CustomAlert } from '../../../components/CustomAlert';
+import { Config } from '../../../config';
 
 // Компонент модального окна ручной работы
 interface ManualWorkModalProps {
@@ -34,10 +35,57 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
         message: '',
         type: 'success' as 'success' | 'error',
     });
+    const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+    const title = Config.USER_ID;
+    const serverUrl = Config.SERVER_URL;
 
     const inputRef = useRef<TextInput>(null);
 
-    // Автофокус при открытии модального окна
+    const pingServer = async () => {
+        try {
+            setServerStatus('checking');
+            const startTime = Date.now();
+
+            // Создаем контроллер для отмены запроса
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000); // Таймаут 3 секунды
+
+            const response = await fetch(`${serverUrl}/code/ping`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                signal: controller.signal
+            });
+
+            // Очищаем таймаут, если запрос выполнился раньше
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                const pingTime = Date.now() - startTime;
+                console.log(`Пинг сервера: ${pingTime}ms`);
+                setServerStatus('online');
+            } else {
+                setServerStatus('offline');
+            }
+        } catch (error) {
+            console.log('Ошибка пинга сервера:', error);
+            setServerStatus('offline');
+        }
+    };
+
+    useEffect(() => {
+        if (visible) {
+            pingServer();
+
+            const intervalId = setInterval(pingServer, 30000);
+
+            return () => {
+                clearInterval(intervalId);
+            };
+        }
+    }, [visible]);
+
     useEffect(() => {
         if (visible) {
             const timer = setTimeout(() => {
@@ -47,11 +95,11 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
         }
     }, [visible]);
 
-    // Сброс информации о коробке при закрытии модального окна
     useEffect(() => {
         if (!visible) {
             setBoxInfo(null);
             setCode('');
+            setServerStatus('checking');
         }
     }, [visible]);
 
@@ -60,15 +108,15 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
             const result = await ApiService.getCounts();
             if (result) {
                 console.log('--------------------res', result.data);
-
-                setBoxInfo({
-                    boxNumber: +result.data.lastBoxNumber,
-                    palletNumber: +result.data.lastPalletNumber,
-                    productsInBox: +result.data.productsInBox,
-                    limitProductsInBox: parseInt(result.data.limitProductsInBox) || 2
-                });
+                if (result.data) {
+                    setBoxInfo({
+                        boxNumber: +result.data.lastBoxNumber,
+                        palletNumber: +result.data.lastPalletNumber,
+                        productsInBox: +result.data.productsInBox,
+                        limitProductsInBox: parseInt(result.data.limitProductsInBox) || 2
+                    });
+                }
             }
-
         }
         get()
 
@@ -146,6 +194,20 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
         return (boxInfo.productsInBox / boxInfo.limitProductsInBox) * 100;
     };
 
+    // Получение цвета и иконки для статуса сервера
+    const getServerStatusIcon = () => {
+        switch (serverStatus) {
+            case 'online':
+                return '🟢';
+            case 'offline':
+                return '🔴';
+            case 'checking':
+                return '🟡';
+            default:
+                return '⚪';
+        }
+    };
+
     return (
         <Modal
             visible={visible}
@@ -157,6 +219,28 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.modalContainer}
             >
+                {/* Информация об операторе и сервере */}
+                <View style={styles.modalHeader}>
+                    <View style={styles.infoContainer}>
+                        <Text style={styles.modalOperatorTitle}>
+                            Оператор №{title}
+                        </Text>
+                        <TouchableOpacity
+                            onPress={pingServer}
+                            style={styles.serverInfoButton}
+                            disabled={serverStatus === 'checking'}
+                        >
+                            <Text style={[
+                                styles.serverInfoText,
+                                serverStatus === 'offline' && styles.serverInfoTextOffline,
+                                serverStatus === 'online' && styles.serverInfoTextOnline,
+                            ]}>
+                                {getServerStatusIcon()} Сервер: {serverUrl}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
                 {/* Заголовок модального окна */}
                 <View style={styles.modalHeader}>
                     <Text style={styles.modalTitle}>Режим ручной работы</Text>
@@ -224,7 +308,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
                     message={alertConfig.message}
                     type={alertConfig.type}
                     onClose={handleAlertClose}
-                    autoCloseTime={alertConfig.type === 'success' ? 1000 : undefined}
+                    autoCloseTime={alertConfig.type === 'success' ? 100 : undefined}
                 />
             </KeyboardAvoidingView>
         </Modal>

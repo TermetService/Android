@@ -12,98 +12,74 @@ export interface FormattedResponse {
 /**
  * Форматирует ответ от сервера поиска в удобный для отображения вид
  */
-export const formatSearchResponse = (result: SearchResponse): FormattedResponse => {
-  // Если есть сообщение об ошибке "не найден"
-  if (result.message && result.message.includes('не найден')) {
+export const formatSearchResponse = (result: any): FormattedResponse => {
+  // Проверяем статус ответа от сервера
+  if (result.status === 'found') {
+    // Определяем тип найденного кода
+    const codeType = result.codeType;
+    const data = result.data;
+
+    if (codeType === 'code' && data) {
+      return {
+        title: '✅ Код найден',
+        message: `В коробке №${data.box_number} на паллете №${data.pallet_number}`,
+        type: 'success',
+        showActionButton: false,
+      };
+    }
+
+    if (codeType === 'box' && data) {
+      return {
+        title: '✅ Коробка найдена',
+        message: `Коробка №${data.box_number} находится на паллете №${data.pallet_number}`,
+        type: 'success',
+        showActionButton: false,
+        // actionButtonText: 'Действия с коробкой',
+        // searchData: {
+        //   type: 'box',
+        //   boxNumber: data.box_number,
+        //   boxLabel: data.box_label,
+        //   palletNumber: data.pallet_number,
+        //   id: data.id,
+        // },
+      };
+    }
+
+    if (codeType === 'pallet' && data) {
+      return {
+        title: `✅ Паллета №${data.pallet_number} найдена`,
+        message: ``,
+        type: 'success',
+        showActionButton: false,
+      };
+    }
+  }
+
+  // Обработка статуса not_found
+  if (result.status === 'not_found') {
     return {
       title: '❌ Не найдено',
-      message: result.message,
+      message: result.message || 'Запись не найдена в системе',
       type: 'error',
       showActionButton: false,
     };
   }
-  
-  // Если найден код
-  if (result.from === 'code' && result.code) {
-    const { box_number, pallet_number, box_label, pallet_label } = result.code;
-    let message = `Коробка: ${box_number}`;
 
-    if (box_label) {
-      message += `\nМетка коробки: ${box_label}`;
-    }
-
-    message += `\nПаллета: ${pallet_number}`;
-
-    if (pallet_label) {
-      message += `\nМетка паллеты: ${pallet_label}`;
-    }
-
+  // Обработка статуса invalid_format
+  if (result.status === 'invalid_format') {
     return {
-      title: '✅ Код найден',
-      message,
-      type: 'success',
-      showActionButton: false, // Для кода кнопки нет
+      title: '⚠️ Неверный формат',
+      message: result.message || 'Неверный формат кода',
+      type: 'error',
+      showActionButton: false,
     };
   }
-  
-  // Если найдена коробка
-  if (result.from === 'box' && result.code) {
-    const { box_number, pallet_number, box_label, pallet_label, id } = result.code;
-    let message = `Коробка: ${box_number}`;
 
-    if (box_label) {
-      message += `\nМетка коробки: ${box_label}`;
-    }
-
-    message += `\nПаллета: ${pallet_number}`;
-
-    if (pallet_label) {
-      message += `\nМетка паллеты: ${pallet_label}`;
-    }
-
-    return {
-      title: '✅ Коробка найдена',
-      message,
-      type: 'success',
-      showActionButton: true, // Только для коробки показываем кнопку
-      actionButtonText: 'Действия с коробкой',
-      searchData: {
-        type: 'box',
-        boxNumber: box_number,
-        boxLabel: box_label,
-        palletNumber: pallet_number,
-        id: id,
-      },
-    };
-  }
-  
-  // Если найдена паллета
-  if (result.from === 'pallet' && result.code) {
-    const { box_number, pallet_number, box_label, pallet_label } = result.code;
-    let message = `Коробка: ${box_number}`;
-
-    if (box_label) {
-      message += `\nМетка коробки: ${box_label}`;
-    }
-
-    message += `\nПаллета: ${pallet_number}`;
-
-    if (pallet_label) {
-      message += `\nМетка паллеты: ${pallet_label}`;
-    }
-
-    return {
-      title: '✅ Паллета найдена',
-      message,
-      type: 'success',
-      showActionButton: false, // Для паллеты пока без кнопки
-    };
-  }
-  
-  // Если есть другое сообщение от сервера
+  // Если есть сообщение об ошибке
   if (result.message) {
-    const hasError = result.message.toLowerCase().includes('ошибка');
-    
+    const hasError = result.message.toLowerCase().includes('ошибка') ||
+      result.status === 'error';
+
     return {
       title: hasError ? '⚠️ Ошибка' : 'ℹ️ Информация',
       message: result.message,
@@ -111,7 +87,7 @@ export const formatSearchResponse = (result: SearchResponse): FormattedResponse 
       showActionButton: false,
     };
   }
-  
+
   // Неизвестный формат ответа
   return {
     title: '⚠️ Неизвестный ответ',
