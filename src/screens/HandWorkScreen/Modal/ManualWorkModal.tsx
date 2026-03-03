@@ -48,7 +48,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
 
             // Создаем контроллер для отмены запроса
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000); // Таймаут 3 секунды
+            const timeoutId = setTimeout(() => controller.abort(), 1000);
 
             const response = await fetch(`${serverUrl}/code/ping`, {
                 method: 'GET',
@@ -122,17 +122,14 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
 
     }, []);
 
-    const resetInput = () => {
-        // Очищаем поле ввода после алерта
-        setCode('');
-        // Возвращаем фокус на поле ввода
-        setTimeout(() => inputRef.current?.focus(), 100);
-    };
-
     // Обработка отправки кода
     const handleSubmit = async () => {
         const trimmedCode = code.trim();
         if (!trimmedCode) return;
+
+        // Мгновенная очистка поля и возврат фокуса
+        setCode('');
+        inputRef.current?.focus();
 
         try {
             const result = await ApiService.handSave(trimmedCode);
@@ -185,7 +182,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
     // Обработчик закрытия кастомного алерта
     const handleAlertClose = () => {
         setShowCustomAlert(false);
-        resetInput();
+        // Не нужно очищать и фокусить, так как это уже сделано в handleSubmit
     };
 
     // Вычисление процента заполнения коробки
@@ -308,7 +305,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
                     message={alertConfig.message}
                     type={alertConfig.type}
                     onClose={handleAlertClose}
-                    autoCloseTime={alertConfig.type === 'success' ? 100 : undefined}
+                    autoCloseTime={alertConfig.type === 'success' ? 50 : undefined}
                 />
             </KeyboardAvoidingView>
         </Modal>
