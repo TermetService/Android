@@ -36,6 +36,12 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
         type: 'success' as 'success' | 'error',
     });
     const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+
+    // Очередь с ограничением
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [requestQueue, setRequestQueue] = useState<string[]>([]);
+    const MAX_QUEUE_SIZE = 10; // Максимальный размер очереди
+
     const title = Config.USER_ID;
     const serverUrl = Config.SERVER_URL;
 
@@ -46,9 +52,8 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
             setServerStatus('checking');
             const startTime = Date.now();
 
-            // Создаем контроллер для отмены запроса
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 1000);
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
 
             const response = await fetch(`${serverUrl}/code/ping`, {
                 method: 'GET',
@@ -58,7 +63,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
                 signal: controller.signal
             });
 
-            // Очищаем таймаут, если запрос выполнился раньше
             clearTimeout(timeoutId);
 
             if (response.ok) {
@@ -72,6 +76,12 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
             console.log('Ошибка пинга сервера:', error);
             setServerStatus('offline');
         }
+    };
+
+    // Звуковая индикация (для ТСД)
+    const playBeep = (type: 'success' | 'error') => {
+        // Здесь код для воспроизведения звукового сигнала ТСД
+        console.log(`🔊 ${type === 'success' ? '✓' : '✗'}`);
     };
 
     useEffect(() => {
@@ -100,6 +110,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
             setBoxInfo(null);
             setCode('');
             setServerStatus('checking');
+            setRequestQueue([]); // Очищаем очередь при закрытии
         }
     }, [visible]);
 
@@ -119,57 +130,87 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
             }
         }
         get()
-
     }, []);
 
-    // Обработка отправки кода
-    const handleSubmit = async () => {
+    // Обработка очереди
+    useEffect(() => {
+        const processQueue = async () => {
+            if (requestQueue.length > 0 && !isSubmitting) {
+                setIsSubmitting(true);
+                const currentCode = requestQueue[0];
+
+                try {
+                    const result = await ApiService.handSave(currentCode);
+
+                    // Убираем обработанный запрос
+                    setRequestQueue(prev => prev.slice(1));
+
+                    // Звуковой сигнал
+                    playBeep(result.success ? 'success' : 'error');
+
+                    // Показываем алерт только для ошибок
+                    if (!result.success) {
+                        setAlertConfig({
+                            title: '⚠️ Ошибка',
+                            message: result.message,
+                            type: 'error',
+                        });
+                        setShowCustomAlert(true);
+                    }
+
+                    // Обновляем информацию о коробке из ответа
+                    if (result.success && result.data?.result) {
+                        setBoxInfo({
+                            boxNumber: result.data.result.boxNumber,
+                            palletNumber: result.data.result.palletNumber,
+                            productsInBox: result.data.result.productsInBox,
+                            limitProductsInBox: parseInt(result.data.result.limitProductsInBox) || 2
+                        });
+                    }
+                } catch (error) {
+                    playBeep('error');
+                    setAlertConfig({
+                        title: '❌ Ошибка',
+                        message: 'Ошибка соединения с сервером',
+                        type: 'error',
+                    });
+                    setShowCustomAlert(true);
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
+        };
+
+        processQueue();
+    }, [requestQueue, isSubmitting]);
+
+    const handleSubmit = () => {
         const trimmedCode = code.trim();
         if (!trimmedCode) return;
 
-        // Мгновенная очистка поля и возврат фокуса
-        setCode('');
-        inputRef.current?.focus();
-
-        try {
-            const result = await ApiService.handSave(trimmedCode);
-            console.log(`Ручное сохранение кода: ----============= ${JSON.stringify(result)}`);
-
-            // Обновляем информацию о коробке из ответа
-            if (result.success && result.data?.result) {
-                setBoxInfo({
-                    boxNumber: result.data.result.boxNumber,
-                    palletNumber: result.data.result.palletNumber,
-                    productsInBox: result.data.result.productsInBox,
-                    limitProductsInBox: parseInt(result.data.result.limitProductsInBox) || 2
-                });
-            }
-
-            // Настраиваем кастомный алерт в зависимости от результата
-            if (result.success) {
-                setAlertConfig({
-                    title: '✅ Успешно',
-                    message: result.message,
-                    type: 'success',
-                });
-            } else {
-                setAlertConfig({
-                    title: '⚠️ Ошибка',
-                    message: result.message,
-                    type: 'error',
-                });
-            }
-
-            setShowCustomAlert(true);
-
-        } catch (error) {
+        // Проверка размера очереди
+        if (requestQueue.length >= MAX_QUEUE_SIZE) {
+            playBeep('error');
             setAlertConfig({
-                title: '❌ Ошибка',
-                message: 'Произошла ошибка при сохранении кода',
+                title: '⚠️ Переполнение',
+                message: 'Очередь переполнена. Дождитесь обработки',
                 type: 'error',
             });
             setShowCustomAlert(true);
+            setCode('');
+            inputRef.current?.focus();
+            return;
         }
+
+        // Добавляем в очередь
+        setRequestQueue(prev => [...prev, trimmedCode]);
+
+        // Очищаем поле для следующего скана
+        setCode('');
+        inputRef.current?.focus();
+
+        // Короткий сигнал подтверждения сканирования
+        playBeep('success');
     };
 
     // Обработка нажатия Enter
@@ -182,7 +223,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
     // Обработчик закрытия кастомного алерта
     const handleAlertClose = () => {
         setShowCustomAlert(false);
-        // Не нужно очищать и фокусить, так как это уже сделано в handleSubmit
     };
 
     // Вычисление процента заполнения коробки
@@ -203,6 +243,20 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
             default:
                 return '⚪';
         }
+    };
+
+    // Отображение статуса очереди (используем существующие стили)
+    const renderQueueStatus = () => {
+        if (requestQueue.length > 0) {
+            return (
+                <View style={styles.infoContainer}>
+                    <Text style={[styles.modalOperatorTitle, { color: '#FF9800' }]}>
+                        📦 В очереди: {requestQueue.length}
+                    </Text>
+                </View>
+            );
+        }
+        return null;
     };
 
     return (
@@ -246,6 +300,9 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
                     </TouchableOpacity>
                 </View>
 
+                {/* Статус очереди */}
+                {renderQueueStatus()}
+
                 {/* Информация о коробке (вверху экрана) */}
                 {boxInfo && (
                     <View style={styles.boxInfoContainer}>
@@ -288,13 +345,16 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
                         onChangeText={setCode}
                         onSubmitEditing={handleSubmit}
                         onKeyPress={handleKeyPress}
-                        placeholder="Введите код"
+                        placeholder={requestQueue.length > 0
+                            ? `Очередь: ${requestQueue.length} | Введите код...`
+                            : "Введите код"}
                         placeholderTextColor="#999"
                         autoCapitalize="characters"
                         autoCorrect={false}
                         autoFocus={true}
                         returnKeyType="done"
                         blurOnSubmit={false}
+                        editable={requestQueue.length < MAX_QUEUE_SIZE}
                     />
                 </View>
 
@@ -305,7 +365,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
                     message={alertConfig.message}
                     type={alertConfig.type}
                     onClose={handleAlertClose}
-                    autoCloseTime={alertConfig.type === 'success' ? 50 : undefined}
+                    autoCloseTime={alertConfig.type === 'success' ? 100 : undefined}
                 />
             </KeyboardAvoidingView>
         </Modal>
