@@ -172,7 +172,7 @@ export class ApiService {
 
   static async addCodeToBox(code: string, boxNumber: number) {
     try {
-      console.log(`Добавление кода ${code} в коробку ${boxNumber}`);
+      console.log(`Добавление кода ${code} в упаковку ${boxNumber}`);
 
       const response = await fetch(`${Config.SERVER_URL}/code/addCodeToBox`, {
         method: 'POST',
@@ -253,7 +253,7 @@ export class ApiService {
 
   static async bindLabelToBox(boxLabel: string, boxNumber: number) {
     try {
-      console.log(`Привязка этикетки ${boxLabel} к коробке ${boxNumber}`);
+      console.log(`Привязка этикетки ${boxLabel} к упаковке ${boxNumber}`);
       // Alert.alert(' Успешно----------', boxLabel,);
       // Alert.alert(' Успешно--------222--', `${boxNumber}`);
 

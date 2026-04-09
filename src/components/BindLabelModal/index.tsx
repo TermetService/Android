@@ -52,7 +52,7 @@ export const BindLabelModal: React.FC<BindLabelModalProps> = ({
 
                             {boxNumber && (
                                 <Text style={styles.boxNumberText}>
-                                    Коробка №{boxNumber}
+                                    Упаковка №{boxNumber}
                                 </Text>
                             )}
 

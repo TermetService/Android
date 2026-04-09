@@ -90,7 +90,7 @@ export const useModalHandlers = ({
             const boxNumber = foundCodeData?.code?.box_number;
 
             if (!boxNumber) {
-                Alert.alert('Ошибка', 'Не найден номер коробки');
+                Alert.alert('Ошибка', 'Не найден номер упаковки');
                 setLabelModalVisible(false);
                 return;
             }
@@ -158,35 +158,35 @@ export const useModalHandlers = ({
             const boxNumber = foundCodeData?.code?.box_number;
 
             if (!boxNumber) {
-                Alert.alert('Ошибка', 'Не найден номер коробки');
+                Alert.alert('Ошибка', 'Не найден номер упаковки');
                 setAddToBoxModalVisible(false);
                 return;
             }
 
-            console.log('Добавление кода в коробку:', { productCode, boxNumber });
+            console.log('Добавление кода в упаковку:', { productCode, boxNumber });
 
             // Отправляем запрос на сервер
             const result = await ApiService.addCodeToBox(productCode, boxNumber);
 
-            console.log('Результат добавления в коробку:', result);
+            console.log('Результат добавления в упаковку:', result);
             Alert.alert('-----------add code', `Response: ${JSON.stringify(result)}`);
 
             // Проверяем успешность на основе нового формата ответа
             // Если есть data с code и id, считаем операцию успешной
             if (result.data && result.data.code && result.data.id) {
-                Alert.alert('✅ Успешно', 'Код добавлен в коробку');
+                Alert.alert('✅ Успешно', 'Код добавлен в упаковку');
                 setAddToBoxModalVisible(false);
             }
             // Оставляем старую проверку для обратной совместимости
             else if (result.success === true || result.message?.toLowerCase().includes('успешно')) {
-                Alert.alert('✅ Успешно', 'Код добавлен в коробку');
+                Alert.alert('✅ Успешно', 'Код добавлен в упаковку');
                 setAddToBoxModalVisible(false);
             } else {
-                Alert.alert('❌ Ошибка', result.message || 'Не удалось добавить код в коробку');
+                Alert.alert('❌ Ошибка', result.message || 'Не удалось добавить код в упаковку');
             }
         } catch (error: any) {
-            console.error('Ошибка при добавлении в коробку:', error);
-            Alert.alert('❌ Ошибка', error.message || 'Не удалось добавить код в коробку');
+            console.error('Ошибка при добавлении в упаковку:', error);
+            Alert.alert('❌ Ошибка', error.message || 'Не удалось добавить код в упаковку');
         }
     };
 

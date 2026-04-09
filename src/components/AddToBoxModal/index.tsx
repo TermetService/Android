@@ -48,11 +48,11 @@ export const AddToBoxModal: React.FC<AddToBoxModalProps> = ({
         <View style={styles.modalOverlay}>
           <TouchableWithoutFeedback>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>📦 Добавить код в коробку</Text>
+              <Text style={styles.modalTitle}>📦 Добавить код в упаковку</Text>
               
               {boxNumber && (
                 <Text style={styles.boxNumberText}>
-                  Коробка №{boxNumber}
+                  Упаковка №{boxNumber}
                 </Text>
               )}
 

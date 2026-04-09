@@ -46,7 +46,7 @@ export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
             <View style={styles.row}>
               <Text style={styles.icon}>📦</Text>
               <Text style={[styles.text, styles.successText]}>
-                Найдена коробка №{result.boxNumber} {result.boxLabel || "без этикетки"}
+                Найдена упаковка №{result.boxNumber} {result.boxLabel || "без этикетки"}
               </Text>
             </View>
             {result.type && (
@@ -68,7 +68,7 @@ export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
           <View style={styles.row}>
             <Text style={styles.icon}>✅</Text>
             <Text style={[styles.text, styles.successText]}>
-              Найдено в: коробка №{result.boxNumber} {result.boxLabel || "без этикетки"}
+              Найдено в: упаковка №{result.boxNumber} {result.boxLabel || "без этикетки"}
             </Text>
           </View>
           {result.type && (
