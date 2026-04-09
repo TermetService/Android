@@ -46,6 +46,7 @@ export class ApiService {
       if (!data.code) {
         return { message: 'Код не найден', from: data.from };
       }
+      // Alert.alert(' Успешно--------data--', `${JSON.stringify(data)}`);
 
       return data;
 
@@ -253,8 +254,8 @@ export class ApiService {
   static async bindLabelToBox(boxLabel: string, boxNumber: number) {
     try {
       console.log(`Привязка этикетки ${boxLabel} к коробке ${boxNumber}`);
-      Alert.alert(' Успешно----------', boxLabel,);
-      Alert.alert(' Успешно--------222--', `${boxNumber}`);
+      // Alert.alert(' Успешно----------', boxLabel,);
+      // Alert.alert(' Успешно--------222--', `${boxNumber}`);
 
       const response = await fetch(`${Config.SERVER_URL}/code/bindLabel`, {
         method: 'POST',

@@ -103,6 +103,16 @@ android {
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            
+            // 👇 ДОБАВЛЕНО: Блок для переименования APK файла
+            
+            applicationVariants.all { variant ->
+                variant.outputs.all { output ->
+                    // Создаем имя файла: KRICHEV_v1.0.apk
+                    def newName = "KRICHEV_v${defaultConfig.versionName}.apk"
+                    outputFileName = newName
+                }
+            }
         }
     }
 }

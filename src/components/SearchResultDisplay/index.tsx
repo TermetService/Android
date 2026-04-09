@@ -9,11 +9,12 @@ export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
   loading = false,
 }) => {
   // ДОБАВИТЬ отладочный вывод
-  console.log('🔍 SearchResultDisplay получил:', { 
-    result, 
+  console.log('🔍 SearchResultDisplay получил:', {
+    result,
     loading,
     success: result?.success,
-    boxNumber: result?.boxNumber
+    boxNumber: result?.boxNumber,
+    boxLabel: result?.boxLabel
   });
 
   if (loading) {
@@ -45,7 +46,7 @@ export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
             <View style={styles.row}>
               <Text style={styles.icon}>📦</Text>
               <Text style={[styles.text, styles.successText]}>
-                Найдена коробка №{result.boxNumber}
+                Найдена коробка №{result.boxNumber} {result.boxLabel || "без этикетки"}
               </Text>
             </View>
             {result.type && (
@@ -67,7 +68,7 @@ export const SearchResultDisplay: React.FC<SearchResultDisplayProps> = ({
           <View style={styles.row}>
             <Text style={styles.icon}>✅</Text>
             <Text style={[styles.text, styles.successText]}>
-              Найдено в: коробка №{result.boxNumber}
+              Найдено в: коробка №{result.boxNumber} {result.boxLabel || "без этикетки"}
             </Text>
           </View>
           {result.type && (

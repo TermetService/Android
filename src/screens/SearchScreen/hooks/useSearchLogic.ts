@@ -8,6 +8,7 @@ export interface SearchResult {
     type?: string;
     message?: string;
     from?: 'code' | 'box';
+    boxLabel?: string;
 }
 
 export const useSearchLogic = () => {
@@ -74,6 +75,7 @@ export const useSearchLogic = () => {
                 success: true,
                 boxNumber: data.code.box_number ? parseInt(data.code.box_number.toString(), 10) : undefined,
                 from: data.from || 'code',
+                boxLabel: data.code.box_label
             };
 
             if (data.code.type) {

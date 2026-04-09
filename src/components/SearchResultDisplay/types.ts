@@ -3,6 +3,7 @@ export interface SearchResultDisplayProps {
     success: boolean;
     message?: string;
     boxNumber?: number | string;
+    boxLabel?: number | string;
     type?: string;
     from?: 'code' | 'box'; // Добавляем
   };

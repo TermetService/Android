@@ -103,6 +103,7 @@ export const SearchScreen = () => {
         <Text style={{ color: 'gray', fontSize: 10, textAlign: 'center', marginTop: 4 }}>
           Debug: success={searchResult?.success?.toString()},
           boxNumber={searchResult?.boxNumber}
+          boxLabel={searchResult?.boxLabel}
         </Text>
 
         {/* Остальные кнопки (добавить в упаковку и действия) */}
