@@ -98,7 +98,7 @@ export class ApiService {
     try {
       console.log(`Получение счетчиков`);
 
-      const response = await fetch(`${Config.SERVER_URL}/code/get-user-counts`, {
+      const response = await fetch(`${Config.SERVER_URL}/code/get-counts`, {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -106,8 +106,10 @@ export class ApiService {
         },
         // body: JSON.stringify({ userId: Config.USER_ID }),
       });
+      console.log(`Получение счетчиков 2`, response);
 
       const responseText = await response.text();
+      console.log(`Получение счетчиков 3`, responseText);
 
       if (!response.ok) {
         throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
