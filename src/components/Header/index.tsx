@@ -8,10 +8,10 @@ import { styles } from './styles';
 import { Config } from '../../config';
 
 export const Header: React.FC = () => {
-  const title = Config.USER_ID
+  // const title = Config.USER_ID
   return (
     <View style={styles.screenHeader}>
-      <Text style={styles.screenTitle}>Оператор {title}</Text>
+      {/* <Text style={styles.screenTitle}>Оператор {title}</Text> */}
     </View>
   );
 };

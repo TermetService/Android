@@ -42,7 +42,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
     const [requestQueue, setRequestQueue] = useState<string[]>([]);
     const MAX_QUEUE_SIZE = 10; // Максимальный размер очереди
 
-    const title = Config.USER_ID;
+    // const title = Config.USER_ID;
     const serverUrl = Config.SERVER_URL;
 
     const inputRef = useRef<TextInput>(null);
@@ -273,9 +273,9 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClo
                 {/* Информация об операторе и сервере */}
                 <View style={styles.modalHeader}>
                     <View style={styles.infoContainer}>
-                        <Text style={styles.modalOperatorTitle}>
+                        {/* <Text style={styles.modalOperatorTitle}>
                             Оператор №{title}
-                        </Text>
+                        </Text> */}
                         <TouchableOpacity
                             onPress={pingServer}
                             style={styles.serverInfoButton}

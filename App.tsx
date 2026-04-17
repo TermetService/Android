@@ -41,7 +41,7 @@ const App = () => {
 
   return (
     <>
-      <Header />
+      {/* <Header /> */}
       {/* Рендерим текущий экран */}
       {renderScreen()}
 
