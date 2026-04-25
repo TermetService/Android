@@ -6,7 +6,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  
+
   // Заголовок экрана
   screenHeader: {
     width: '100%',
@@ -23,23 +23,23 @@ export const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  
+
   screenTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#333333',
   },
-  
+
   scrollContent: {
-    paddingTop: 40, 
+    paddingTop: 40,
     flexGrow: 1,
   },
-  
+
   content: {
     flex: 1,
     paddingTop: 40, // Добавим отступ сверху для поля ввода
   },
-  
+
   // Контейнер по центру экрана
   centerContainer: {
     alignItems: 'center',
@@ -47,7 +47,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 40,
     marginBottom: 30, // Отступ для кнопки действия
   },
-  
+
   // Поле ввода поиска
   searchInput: {
     width: '100%',
@@ -67,20 +67,20 @@ export const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  
+
   // Стиль для disabled состояния
   searchInputDisabled: {
     backgroundColor: '#f0f0f0',
     borderColor: '#ddd',
     color: '#999',
   },
-  
+
   // Контейнер для кнопки действия
   actionButtonContainer: {
     alignItems: 'center',
     paddingHorizontal: 40,
   },
-  
+
   // Кнопка действия
   actionButton: {
     backgroundColor: '#007AFF',
@@ -96,7 +96,36 @@ export const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  
+  actionButtonPrint: {
+    backgroundColor: 'green',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    width: '100%',
+    maxWidth: 300,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    marginTop: 20,
+  },
+  actionButtonDelete: {
+    backgroundColor: 'red',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    width: '100%',
+    maxWidth: 300,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    marginTop: 20,
+  },
   actionButtonText: {
     color: 'white',
     fontSize: 18,

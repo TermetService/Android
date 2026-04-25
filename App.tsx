@@ -49,15 +49,17 @@ const App = () => {
       <BurgerMenu menuItems={menuItems} />
 
       {/* Toast поверх всего */}
-      <View style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        pointerEvents: 'box-none',
-        zIndex: 9998,
-      }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'box-none',
+          zIndex: 9998,
+        }}
+      >
         <Toast />
       </View>
     </>

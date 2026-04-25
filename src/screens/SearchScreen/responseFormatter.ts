@@ -1,4 +1,4 @@
-import { SearchResponse } from "../../services/types";
+import { SearchResponse } from '../../services/types';
 
 export interface FormattedResponse {
   title: string;
@@ -25,6 +25,13 @@ export const formatSearchResponse = (result: any): FormattedResponse => {
         message: `В коробке №${data.box_number} на паллете №${data.pallet_number}`,
         type: 'success',
         showActionButton: false,
+        searchData: {
+          type: 'code',
+          boxNumber: data.box_number,
+          boxLabel: data.box_label,
+          palletNumber: data.pallet_number,
+          id: data.id,
+        },
       };
     }
 
@@ -33,15 +40,15 @@ export const formatSearchResponse = (result: any): FormattedResponse => {
         title: '✅ Коробка найдена',
         message: `Коробка №${data.box_number} находится на паллете №${data.pallet_number}`,
         type: 'success',
-        showActionButton: false,
-        // actionButtonText: 'Действия с коробкой',
-        // searchData: {
-        //   type: 'box',
-        //   boxNumber: data.box_number,
-        //   boxLabel: data.box_label,
-        //   palletNumber: data.pallet_number,
-        //   id: data.id,
-        // },
+        showActionButton: true,
+        actionButtonText: 'Действия с коробкой',
+        searchData: {
+          type: 'box',
+          boxNumber: data.box_number,
+          boxLabel: data.box_label,
+          palletNumber: data.pallet_number,
+          id: data.id,
+        },
       };
     }
 
@@ -50,7 +57,14 @@ export const formatSearchResponse = (result: any): FormattedResponse => {
         title: `✅ Паллета №${data.pallet_number} найдена`,
         message: ``,
         type: 'success',
-        showActionButton: false,
+        showActionButton: true,
+        actionButtonText: 'Действия с паллетой',
+        searchData: {
+          type: 'pallet',
+          boxNumber: data.box_number,
+          palletNumber: data.pallet_number,
+          id: data.id,
+        },
       };
     }
   }
@@ -77,7 +91,8 @@ export const formatSearchResponse = (result: any): FormattedResponse => {
 
   // Если есть сообщение об ошибке
   if (result.message) {
-    const hasError = result.message.toLowerCase().includes('ошибка') ||
+    const hasError =
+      result.message.toLowerCase().includes('ошибка') ||
       result.status === 'error';
 
     return {
