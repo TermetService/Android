@@ -51,7 +51,7 @@ export const CodeForm = ({
           activeOpacity={0.7}
         >
           <Text style={styles.actionButtonText}>
-            Печать Паллеты {' №-'}
+            Печать Коробки{' №-'}
             {palletNumber}
           </Text>
         </TouchableOpacity>
@@ -63,7 +63,7 @@ export const CodeForm = ({
           activeOpacity={0.7}
         >
           <Text style={styles.actionButtonText}>
-            Печать Коробки {' №-'}
+            Печать Паллеты {' №-'}
             {boxNumber}
           </Text>
         </TouchableOpacity>
