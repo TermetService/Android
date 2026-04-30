@@ -106,7 +106,7 @@ android {
             applicationVariants.all { variant ->
                 variant.outputs.all { output ->
                     // Создаем имя файла: RED_PISCHEVIK.apk
-                    def newName = "RED_PISCHEVIK_v${defaultConfig.versionName}.apk"
+                    def newName = "RED12131_PISCHEVIK_v${defaultConfig.versionName}.apk"
                     outputFileName = newName
                 }
             }
