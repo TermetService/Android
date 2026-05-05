@@ -12,10 +12,9 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { styles } from './styles';
-import { formatSearchResponse, formatNetworkError } from './responseFormatter';
+import { InputModal } from '../HandWorkScreen/Modal/InputModal';
 import { ApiService } from '../../services/api';
-import { ActionsModal } from '../../components/ActionsModal';
-
+import { Config } from '../../config';
 export const CodeForm = ({
   PrintBox,
   PrintPallet,
@@ -42,8 +41,46 @@ export const CodeForm = ({
       { cancelable: true },
     );
   };
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    title: '',
+    placeholder: '',
+    onConfirm: (value: string) => {},
+  });
+  const addInBox = () => {
+    // Пример использования для добавления кода
+    setModalConfig({
+      title: 'Добавление кода',
+      placeholder: 'Введите код продукта',
+      onConfirm: async (code: string) => {
+        console.log('Добавляем код:', code);
+        // Ваша логика добавления
+        const resalt = await ApiService.addCodeToBox(
+          code,
+          boxNumber,
+          palletNumber,
+          Config.USER_ID,
+        );
+        Toast.show({
+          type: 'success',
+          text1: `${resalt.message}`,
+
+          position: 'bottom',
+          visibilityTime: 4000,
+        });
+      },
+    });
+    setModalVisible(true);
+  };
   return (
     <>
+      <InputModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onSubmit={modalConfig.onConfirm}
+        title={modalConfig.title}
+        placeholder={modalConfig.placeholder}
+      />
       <View style={styles.actionButtonContainer}>
         <TouchableOpacity
           style={styles.actionButtonPrint}
@@ -52,7 +89,7 @@ export const CodeForm = ({
         >
           <Text style={styles.actionButtonText}>
             Печать Коробки{' №-'}
-            {palletNumber}
+            {boxNumber}
           </Text>
         </TouchableOpacity>
       </View>
@@ -64,7 +101,18 @@ export const CodeForm = ({
         >
           <Text style={styles.actionButtonText}>
             Печать Паллеты {' №-'}
-            {boxNumber}
+            {palletNumber}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.actionButtonContainer}>
+        <TouchableOpacity
+          style={styles.actionButtonPrint}
+          onPress={addInBox}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.actionButtonText}>
+            Добавить код в текущую коробку
           </Text>
         </TouchableOpacity>
       </View>

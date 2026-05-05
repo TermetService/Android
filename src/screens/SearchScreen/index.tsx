@@ -28,8 +28,9 @@ export const SearchScreen = () => {
   const [CodeForDel, setCodeForDel] = useState<any>([]);
   const [open, setOpen] = useState(false);
   const [openForm, setOpenForm] = useState(false);
+
   const clearAllStates = () => {
-    setCode('');
+    setCode(() => '');
     setIsLoading(false);
     setFormattedResponse(null);
     setShowActionButton(false);
@@ -57,10 +58,13 @@ export const SearchScreen = () => {
     const trimmedCode = code.trim();
     if (!trimmedCode) return;
 
+    setCode('');
     setIsLoading(true);
     setShowActionButton(false);
     setFormattedResponse(null);
-
+    if (inputRef.current) {
+      inputRef.current.setNativeProps({ text: '' });
+    }
     try {
       const result = await ApiService.searchCode(trimmedCode);
       setBoxNumber(result.data?.box_number);
@@ -72,7 +76,7 @@ export const SearchScreen = () => {
       const formatted = formatSearchResponse(result);
       console.log(formattedResponse, ']]]]]]]]]]]]', result);
       setFormattedResponse(formatted);
-      console.log(formatted, 'хуУУУУУУУУУУУУУУУУУУУУУУУУУУУУУУУУУУЙ');
+
       setShowActionButton(formatted.showActionButton || false);
 
       Toast.show({
@@ -102,7 +106,6 @@ export const SearchScreen = () => {
       });
     } finally {
       setIsLoading(false);
-      setCode('');
     }
   };
 
@@ -193,7 +196,7 @@ export const SearchScreen = () => {
                 styles.searchInput,
                 isLoading && styles.searchInputDisabled,
               ]}
-              value={code}
+              value=""
               onChangeText={setCode}
               onSubmitEditing={handleSubmit}
               placeholder={isLoading ? 'Поиск...' : 'Введите код'}
@@ -214,6 +217,7 @@ export const SearchScreen = () => {
                   setOpen(prev => !prev);
                 }}
                 activeOpacity={0.7}
+                accessible={false}
               >
                 <Text style={styles.actionButtonText}>Действия с кодом</Text>
               </TouchableOpacity>

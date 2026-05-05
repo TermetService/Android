@@ -48,7 +48,7 @@ export class ApiService {
           Accept: 'application/json',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, userId: Config.USER_ID }),
       });
 
       const responseText = await response.text();
@@ -290,7 +290,12 @@ export class ApiService {
     }
   }
 
-  static async addCodeToBox(code: string, boxNumber: number) {
+  static async addCodeToBox(
+    code: string,
+    boxNumber: number,
+    palletNumber: any,
+    userId?: any,
+  ) {
     try {
       console.log(`Добавление кода ${code} в коробку ${boxNumber}`);
 
@@ -300,7 +305,7 @@ export class ApiService {
           Accept: 'application/json',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ code, boxNumber }),
+        body: JSON.stringify({ code, boxNumber, palletNumber, userId }),
       });
 
       const responseText = await response.text();
@@ -317,13 +322,7 @@ export class ApiService {
       const result = JSON.parse(responseText);
 
       // Стандартизируем ответ
-      return {
-        success:
-          result.success === true ||
-          result.message?.toLowerCase().includes('успешно'),
-        message: result.message,
-        data: result,
-      };
+      return result;
     } catch (error) {
       console.error('Ошибка добавления кода:', error);
       return {
