@@ -73,3 +73,28 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# React Native
+android/app/build/
+android/build/
+ios/build/
+
+# APK файлы
+*.apk
+*.aab
+
+# Кэш и временные файлы
+.gradle/
+.idea/
+*.iml
+*.log
+*.tmp
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Metro
+metro.config.js.local

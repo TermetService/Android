@@ -73,7 +73,7 @@ def enableProguardInReleaseBuilds = false
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
-    ndkVersion rootProject.ext.ndkVersion
+    ndkVersion "30.0.14904198"
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
@@ -103,6 +103,13 @@ android {
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            applicationVariants.all { variant ->
+                variant.outputs.all { output ->
+                    // Создаем имя файла: RED_PISCHEVIK.apk
+                    def newName = "RED12131_PISCHEVIK_v${defaultConfig.versionName}.apk"
+                    outputFileName = newName
+                }
+            }
         }
     }
 }

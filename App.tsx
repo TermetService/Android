@@ -1,45 +1,69 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+// App.tsx
+import React, { useState } from 'react';
+import { View } from 'react-native';
+import Toast from 'react-native-toast-message';
+import { HandWorkScreen } from './src/screens/HandWorkScreen';
+import { SearchScreen } from './src/screens/SearchScreen';
+import { BurgerMenu } from './src/components/BurgerMenu';
+import { Header } from './src/components/Header';
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
-
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
-  );
+enum Pages {
+  Page1 = 'search',
+  Page2 = 'handwork',
 }
 
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
+const App = () => {
+  const [currentScreen, setCurrentScreen] = useState<Pages>(Pages.Page1);
+
+  const renderScreen = () => {
+    switch (currentScreen) {
+      case Pages.Page1:
+        return <SearchScreen />;
+      case Pages.Page2:
+        return <HandWorkScreen />;
+      default:
+        return <SearchScreen />;
+    }
+  };
+
+  const menuItems = [
+    {
+      id: '1',
+      title: 'Поиск',
+      onPress: () => setCurrentScreen(Pages.Page1),
+    },
+    {
+      id: '2',
+      title: 'Ручная работа',
+      onPress: () => setCurrentScreen(Pages.Page2),
+    },
+  ];
 
   return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
-}
+    <>
+      {/* <Header /> */}
+      {/* Рендерим текущий экран */}
+      {renderScreen()}
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
+      {/* Бургер-меню всегда поверх экрана */}
+      <BurgerMenu menuItems={menuItems} />
+
+      {/* Toast поверх всего */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'box-none',
+          zIndex: 9998,
+        }}
+      >
+        <Toast />
+      </View>
+    </>
+  );
+};
 
 export default App;
