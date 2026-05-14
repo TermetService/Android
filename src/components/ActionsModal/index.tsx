@@ -1,4 +1,4 @@
-// src/screens/ActionsModal.tsx
+// src/components/ActionsModal.tsx
 import React, { useState } from 'react';
 import {
   Modal,
@@ -10,14 +10,24 @@ import {
   ActivityIndicator,
   FlatList,
 } from 'react-native';
-import { ApiService } from '../../services/api';
+import { ApiService } from '../../services/api.ts';
 
 interface ActionsModalProps {
   visible: boolean;
   onClose: () => void;
-  searchData: any;
-  onDeleteSuccess?: () => void; // Коллбек при успешном удалении
+  searchData: {
+    type: 'code' | 'box' | 'pallet';
+    boxNumber?: number;
+    palletNumber?: number;
+    boxLabel?: string | null;
+    palletLabel?: string | null;
+    id?: number;
+    code?: string;
+    countIn?: number;
+  };
+  onDeleteSuccess?: () => void;
 }
+
 interface Pallet {
   pallet_number: number;
   box_count: string | number;
@@ -30,154 +40,195 @@ export const ActionsModal: React.FC<ActionsModalProps> = ({
   onDeleteSuccess,
 }) => {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRemovingFromPallet, setIsRemovingFromPallet] = useState(false);
   const [isDeletingPallet, setIsDeletingPallet] = useState(false);
-  const [boxNumber, setBoxNumber] = useState<number | undefined>();
+  const [isMoving, setIsMoving] = useState(false);
   const [pallets, setPallets] = useState<Pallet[]>([]);
   const [selectedPallet, setSelectedPallet] = useState<Pallet | null>(null);
-  const [open, setOpen] = useState(false);
+  const [showPalletSelect, setShowPalletSelect] = useState(false);
 
   const handleTransfer = async () => {
-    console.log(selectedPallet?.pallet_number, 'safsfasa');
-    const res = await ApiService.MoveBoxToPallet(
-      searchData.boxNumber,
-      selectedPallet?.pallet_number,
-    );
-    console.log(res.ok);
-    if (res.ok) {
-      setOpen(false);
-      Alert.alert('Успешно перещена');
+    if (!selectedPallet || !searchData.boxNumber) {
+      Alert.alert('Ошибка', 'Выберите паллету для перемещения');
+      return;
+    }
+
+    setIsMoving(true);
+    try {
+      const res = await ApiService.moveBoxToPallet(
+        searchData.boxNumber,
+        selectedPallet.pallet_number,
+      );
+
+      if (res) {
+        setShowPalletSelect(false);
+        setSelectedPallet(null);
+        Alert.alert('✅ Успешно', 'Коробка успешно перемещена');
+        if (onDeleteSuccess) {
+          onDeleteSuccess();
+        }
+        onClose();
+      } else {
+        Alert.alert('❌ Ошибка', 'Не удалось переместить коробку');
+      }
+    } catch (error) {
+      console.error('Ошибка перемещения:', error);
+      Alert.alert('❌ Ошибка', 'Не удалось переместить коробку');
+    } finally {
+      setIsMoving(false);
     }
   };
-  const Transfer = async () => {
-    const res = await ApiService.getAllPallets();
-    setOpen(true);
-    setPallets(res.data);
-    console.log(res);
 
-    // const result = await ApiService.MoveBoxToPallet(searchData.boxNumber, 1);
+  const loadPallets = async () => {
+    try {
+      const res = await ApiService.getAllPallets();
+      if (res && res.data && res.data.length > 0) {
+        // Фильтруем текущую паллету
+        const filteredPallets = res.data.filter(
+          (p: Pallet) => p.pallet_number !== searchData.palletNumber,
+        );
+        setPallets(filteredPallets);
+        setShowPalletSelect(true);
+      } else {
+        Alert.alert('Информация', 'Нет доступных паллет для перемещения');
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки паллет:', error);
+      Alert.alert('Ошибка', 'Не удалось загрузить список паллет');
+    }
   };
-  // Функция подтверждения удаления
-const confirmDeleteBox = () => {
-  Alert.alert(
-    'Удаление коробки',
-    `Вы уверены, что хотите удалить коробку №${searchData.boxNumber}?`,
-    [
-      {
-        text: 'Отмена',
-        style: 'cancel',
-        onPress: () => console.log('Удаление отменено'),
-      },
-      {
-        text: 'Удалить',
-        style: 'destructive',
-        onPress: () => handleDeleteBox(),
-      },
-    ],
-    { cancelable: true },
-  );
-};
+
+  const confirmDeleteBox = () => {
+    Alert.alert(
+      'Удаление коробки',
+      `Вы уверены, что хотите удалить коробку №${searchData.boxNumber}?`,
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: () => handleDeleteBox(),
+        },
+      ],
+    );
+  };
+
   const confirmDeletePallet = () => {
-    console.log(searchData, 'q22222222222222222222222222');
     Alert.alert(
       'Удаление паллеты',
-      `Вы уверены, что хотите удалить паллету №${searchData.palletNumber}?`,
+      `Вы уверены, что хотите удалить паллету №${searchData.palletNumber}?\n\nВНИМАНИЕ: Все коробки с кодами удалятся`,
       [
-        {
-          text: 'Отмена',
-          style: 'cancel',
-          onPress: () => console.log('Удаление отменено'),
-        },
+        { text: 'Отмена', style: 'cancel' },
         {
           text: 'Удалить',
           style: 'destructive',
           onPress: () => handleDeletePallet(),
         },
       ],
-      { cancelable: true },
     );
   };
-  // Функция удаления коробки
+
+  const confirmRemoveBoxFromPallet = () => {
+    Alert.alert(
+      'Изъятие коробки',
+      `Вы уверены, что хотите изъять коробку №${searchData.boxNumber} из паллеты №${searchData.palletNumber}?`,
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Изъять',
+          style: 'destructive',
+          onPress: () => handleRemoveBoxFromPallet(),
+        },
+      ],
+    );
+  };
+
   const handleDeleteBox = async () => {
     if (!searchData.boxNumber) {
-      Alert.alert('Ошибка', 'У коробки нет метки для удаления');
+      Alert.alert('Ошибка', 'Номер коробки не указан');
       return;
     }
 
     setIsDeleting(true);
-
     try {
-      console.log(`Попытка удаления коробки: ${searchData.boxNumber}`);
-
-      // Вызываем метод API для удаления коробки
-
       const result = await ApiService.deleteBox(searchData.boxNumber);
-
       if (result.success) {
-        console.log('Коробка успешно удалена:', result.message);
-
-        // Закрываем модальное окно
         onClose();
-
-        // Вызываем коллбек при успешном удалении
         if (onDeleteSuccess) {
           onDeleteSuccess();
         }
-
-        // Показываем сообщение об успехе
-        Alert.alert('Успешно', result.message);
+        Alert.alert('✅ Успешно', result.message);
       } else {
-        Alert.alert('Ошибка', result.message || 'Не удалось удалить коробку');
+        Alert.alert(
+          '❌ Ошибка',
+          result.message || 'Не удалось удалить коробку',
+        );
       }
     } catch (error) {
-      console.error('Ошибка при удалении коробки:', error);
-      Alert.alert(
-        'Ошибка',
-        error instanceof Error
-          ? error.message
-          : 'Неизвестная ошибка при удалении',
-      );
+      console.error('Ошибка удаления коробки:', error);
+      Alert.alert('❌ Ошибка', 'Не удалось удалить коробку');
     } finally {
       setIsDeleting(false);
     }
   };
+
   const handleDeletePallet = async () => {
-    setIsDeleting(true);
+    if (!searchData.palletNumber) {
+      Alert.alert('Ошибка', 'Номер паллеты не указан');
+      return;
+    }
 
+    setIsDeletingPallet(true);
     try {
-      console.log(`Попытка удаления Паллеты: ${searchData.palletNumber}`);
-
-      // Вызываем метод API для удаления коробки
-
       const result = await ApiService.deletePallet(searchData.palletNumber);
-
       if (result.success) {
-        console.log('Паллета успешно удалена:', result.message);
-
-        // Закрываем модальное окно
         onClose();
-
-        // Вызываем коллбек при успешном удалении
         if (onDeleteSuccess) {
           onDeleteSuccess();
         }
-
-        // Показываем сообщение об успехе
-        Alert.alert('Успешно', result.message);
+        Alert.alert('✅ Успешно', result.message);
       } else {
-        Alert.alert('Ошибка', result.message || 'Не удалось удалить паллету');
+        Alert.alert(
+          '❌ Ошибка',
+          result.message || 'Не удалось удалить паллету',
+        );
       }
     } catch (error) {
-      console.error('Ошибка при удалении паллеты:', error);
-      Alert.alert(
-        'Ошибка',
-        error instanceof Error
-          ? error.message
-          : 'Неизвестная ошибка при удалении',
-      );
+      console.error('Ошибка удаления паллеты:', error);
+      Alert.alert('❌ Ошибка', 'Не удалось удалить паллету');
     } finally {
-      setIsDeleting(false);
+      setIsDeletingPallet(false);
     }
   };
+
+  const handleRemoveBoxFromPallet = async () => {
+    if (!searchData.boxNumber) {
+      Alert.alert('Ошибка', 'Номер коробки не указан');
+      return;
+    }
+
+    setIsRemovingFromPallet(true);
+    try {
+      const result = await ApiService.removeBoxFromPallet(searchData.boxNumber);
+      if (result.success) {
+        onClose();
+        if (onDeleteSuccess) {
+          onDeleteSuccess();
+        }
+        Alert.alert('✅ Успешно', result.message);
+      } else {
+        Alert.alert('❌ Ошибка', result.message || 'Не удалось изъять коробку');
+      }
+    } catch (error) {
+      console.error('Ошибка изъятия коробки:', error);
+      Alert.alert('❌ Ошибка', 'Не удалось изъять коробку');
+    } finally {
+      setIsRemovingFromPallet(false);
+    }
+  };
+
+  const isBox = searchData.type === 'box';
+  const isPallet = searchData.type === 'pallet';
 
   return (
     <Modal
@@ -186,7 +237,7 @@ const confirmDeleteBox = () => {
       animationType="fade"
       onRequestClose={onClose}
     >
-      {!open ? (
+      {!showPalletSelect ? (
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
@@ -197,248 +248,146 @@ const confirmDeleteBox = () => {
             onStartShouldSetResponder={() => true}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Действия с коробкой</Text>
-              <Text style={styles.modalSubtitle}>
-                Коробка: {searchData.boxNumber}
+              <Text style={styles.modalTitle}>
+                {isBox ? 'Действия с коробкой' : 'Действия с паллетой'}
               </Text>
-
-              {searchData.boxNumber && searchData.type === 'box' && (
-                <Text style={styles.boxLabelText}>
-                  Метка: {searchData.boxNumber}
+              <Text style={styles.modalSubtitle}>
+                {isBox
+                  ? `Коробка: ${searchData.boxNumber}`
+                  : `Паллета: ${searchData.palletNumber}`}
+              </Text>
+              {isBox && searchData.palletNumber && (
+                <Text style={styles.modalSubtitle}>
+                  Паллета: {searchData.palletNumber}
                 </Text>
               )}
             </View>
 
             <View style={styles.actionsContainer}>
-              {/* Кнопка удаления коробки */}
-              {/* Кнопка удаления - для коробки или паллеты */}
-              {searchData.boxNumber && searchData.type === 'box' && (
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={confirmDeleteBox}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <Text style={styles.deleteButtonText}>
-                      🗑️ Удалить коробку #{searchData.boxNumber}
+              {/* Действия с коробкой */}
+              {isBox && (
+                <>
+                  <TouchableOpacity
+                    style={styles.moveButton}
+                    onPress={loadPallets}
+                    disabled={isDeleting}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      Переместить коробку
                     </Text>
-                  )}
-                </TouchableOpacity>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.dangerButton}
+                    onPress={confirmDeleteBox}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text style={styles.actionButtonText}>
+                        🗑Удалить коробку
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </>
               )}
 
-              {searchData.palletNumber && searchData.type === 'pallet' && (
+              {/* Действия с паллетой */}
+              {isPallet && (
                 <TouchableOpacity
-                  style={styles.deleteButton}
+                  style={styles.dangerButton}
                   onPress={confirmDeletePallet}
                   disabled={isDeletingPallet}
                 >
                   {isDeletingPallet ? (
                     <ActivityIndicator size="small" color="white" />
                   ) : (
-                    <Text style={styles.deleteButtonText}>
-                      🗑️ Удалить паллету #{searchData.palletNumber}
+                    <Text style={styles.actionButtonText}>
+                      Удалить паллету
                     </Text>
                   )}
                 </TouchableOpacity>
               )}
-              {searchData.type === 'box' ? (
-                <>
-                  <TouchableOpacity
-                    style={styles.TransferButton}
-                    onPress={Transfer}
-                    disabled={isDeleting || !searchData.boxNumber}
-                  >
-                    {isDeleting ? (
-                      <ActivityIndicator size="small" color="white" />
-                    ) : (
-                      <Text style={styles.deleteButtonText}>
-                        Переместить коробку
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                  {!searchData.boxNumber && (
-                    <Text style={styles.warningText}>
-                      Для перемещения коробки необходим номер коробки
-                    </Text>
-                  )}
-                </>
-              ) : null}
-
-              {/* <TouchableOpacity
-                style={styles.TransferButton}
-                onPress={Transfer}
-                disabled={isDeleting || !searchData.boxNumber}
-              >
-                {isDeleting ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={styles.deleteButtonText}>
-                    Переместить коробку
-                  </Text>
-                )}
-              </TouchableOpacity> */}
-              {!searchData.boxLabel && (
-                <Text style={styles.warningText}>
-                  Для удаления коробки необходима метка
-                </Text>
-              )}
             </View>
 
-            {/* Кнопка отмены */}
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={onClose}
-              disabled={isDeleting}
+              disabled={isDeleting || isRemovingFromPallet || isDeletingPallet}
             >
-              <Text style={styles.cancelButtonText}>
-                {isDeleting ? 'Отмена (загрузка...)' : 'Отмена'}
-              </Text>
+              <Text style={styles.cancelButtonText}>Отмена</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
-      ) : null}
-      {open ? (
-        <View style={{ flex: 1, backgroundColor: '#f5f5f5', padding: 16 }}>
-          {/* Заголовок */}
-          <Text
-            style={{
-              fontSize: 24,
-              fontWeight: 'bold',
-              marginBottom: 8,
-              textAlign: 'center',
-              color: '#333',
-            }}
-          >
-            Выберите паллету для перемещения
-          </Text>
+      ) : (
+        // Экран выбора паллеты для перемещения
+        <View style={styles.palletSelectContainer}>
+          <View style={styles.palletSelectHeader}>
+            <Text style={styles.palletSelectTitle}>
+              Выберите паллету для перемещения
+            </Text>
+            <Text style={styles.palletSelectSubtitle}>
+              Коробка №{searchData.boxNumber}
+            </Text>
+          </View>
 
-          <Text
-            style={{
-              fontSize: 16,
-              color: '#666',
-              marginBottom: 20,
-              textAlign: 'center',
-            }}
-          >
-            Коробка #{searchData.boxNumber} будет перемещена
-          </Text>
-
-          {/* Список паллет */}
           <FlatList
             data={pallets}
             keyExtractor={item => item.pallet_number.toString()}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  backgroundColor: 'white',
-                  padding: 16,
-                  borderRadius: 12,
-                  marginBottom: 12,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 2,
-                  borderWidth:
-                    selectedPallet?.pallet_number === item.pallet_number
-                      ? 2
-                      : 0,
-                  borderColor:
-                    selectedPallet?.pallet_number === item.pallet_number
-                      ? 'green'
-                      : 'transparent',
-                }}
-                onPress={() => {
-                  setSelectedPallet(item);
-                  console.log(item);
-                }}
+                style={[
+                  styles.palletItem,
+                  selectedPallet?.pallet_number === item.pallet_number &&
+                    styles.palletItemSelected,
+                ]}
+                onPress={() => setSelectedPallet(item)}
               >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 'bold',
-                      color: '#333',
-                      marginBottom: 4,
-                    }}
-                  >
-                    Паллета #{item.pallet_number}
+                <View style={styles.palletItemContent}>
+                  <Text style={styles.palletItemTitle}>
+                    Паллета №{item.pallet_number}
                   </Text>
-                  <Text style={{ fontSize: 14, color: '#666' }}>
+                  <Text style={styles.palletItemSubtitle}>
                     Коробок: {item.box_count}
                   </Text>
                 </View>
-
                 {selectedPallet?.pallet_number === item.pallet_number && (
-                  <View
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 14,
-                      backgroundColor: 'green',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: 'white',
-                        fontSize: 18,
-                        fontWeight: 'bold',
-                      }}
-                    >
-                      ✓
-                    </Text>
+                  <View style={styles.checkmark}>
+                    <Text style={styles.checkmarkText}>✓</Text>
                   </View>
                 )}
               </TouchableOpacity>
             )}
-            contentContainerStyle={{ paddingBottom: 20 }}
-            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.palletList}
           />
 
-          {/* Кнопка перемещения */}
           <TouchableOpacity
-            style={{
-              backgroundColor: !selectedPallet ? '#ccc' : 'green',
-              borderRadius: 12,
-              paddingVertical: 16,
-              alignItems: 'center',
-              marginTop: 20,
-              marginBottom: 10,
-            }}
+            style={[
+              styles.confirmButton,
+              !selectedPallet && styles.confirmButtonDisabled,
+            ]}
             onPress={handleTransfer}
-            disabled={!selectedPallet}
+            disabled={!selectedPallet || isMoving}
           >
-            <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
-              Переместить коробку
-            </Text>
+            {isMoving ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.actionButtonText}>Переместить коробку</Text>
+            )}
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={{
-              backgroundColor: !selectedPallet ? '#ccc' : 'green',
-              borderRadius: 12,
-              paddingVertical: 16,
-              alignItems: 'center',
-              marginTop: 20,
-              marginBottom: 10,
-            }}
+            style={styles.cancelTransferButton}
             onPress={() => {
-              setOpen(false);
+              setShowPalletSelect(false);
+              setSelectedPallet(null);
             }}
-            disabled={!selectedPallet}
           >
-            <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
-              Отменить действие
-            </Text>
+            <Text style={styles.cancelButtonText}>Отменить</Text>
           </TouchableOpacity>
         </View>
-      ) : null}
+      )}
     </Modal>
   );
 };
@@ -454,7 +403,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 16,
     padding: 24,
-    width: '85%',
+    width: '90%',
     maxWidth: 400,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -475,54 +424,39 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 8,
-  },
-  boxLabelText: {
-    fontSize: 14,
-    color: '#888',
-    fontFamily: 'monospace',
-    textAlign: 'center',
-    marginTop: 4,
+    marginBottom: 4,
   },
   actionsContainer: {
     marginBottom: 20,
-    alignItems: 'center',
   },
-  deleteButton: {
+  moveButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dangerButton: {
     backgroundColor: '#FF3B30',
     borderRadius: 10,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    width: '100%',
     alignItems: 'center',
     marginBottom: 12,
-    opacity: 1,
   },
-  TransferButton: {
-    backgroundColor: 'gray',
+  warningButton: {
+    backgroundColor: '#FF9500',
     borderRadius: 10,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    width: '100%',
     alignItems: 'center',
     marginBottom: 12,
-    opacity: 1,
   },
-  deleteButtonDisabled: {
-    backgroundColor: '#FF9999',
-    opacity: 0.6,
-  },
-  deleteButtonText: {
+  actionButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-  },
-  warningText: {
-    fontSize: 14,
-    color: '#FF9500',
-    textAlign: 'center',
-    marginTop: 8,
-    fontStyle: 'italic',
   },
   cancelButton: {
     paddingVertical: 14,
@@ -534,5 +468,84 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
     fontWeight: '500',
+  },
+  palletSelectContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 16,
+  },
+  palletSelectHeader: {
+    paddingTop: 40,
+    paddingBottom: 20,
+    alignItems: 'center',
+  },
+  palletSelectTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  palletSelectSubtitle: {
+    fontSize: 16,
+    color: '#666',
+  },
+  palletList: {
+    paddingBottom: 20,
+  },
+  palletItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  palletItemSelected: {
+    borderColor: '#34C759',
+  },
+  palletItemContent: {
+    flex: 1,
+  },
+  palletItemTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  palletItemSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  checkmark: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#34C759',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkmarkText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  confirmButton: {
+    backgroundColor: '#34C759',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  confirmButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  cancelTransferButton: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
   },
 });

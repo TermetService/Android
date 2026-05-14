@@ -8,7 +8,15 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "build:apk": "powershell -File build.ps1"
+    "build:apk": "powershell -File build.ps1",
+    "prebuild:android": "cd android && ./gradlew clean",
+    "build:android": "cd android && ./gradlew assembleDebug",
+    "build:android:release": "cd android && ./gradlew assembleRelease",
+    "install:pods": "cd ios && pod install",
+    "open:android": "start android/",
+    "studio:android": "start android/",
+    "dev:android": "npm run prebuild:android && npm run build:android && npm run studio:android",
+    "full:android:release": "npm run prebuild:android && npm run build:android:release"
   },
   "dependencies": {
     "@react-native/new-app-screen": "0.83.1",

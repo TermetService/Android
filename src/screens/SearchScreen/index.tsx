@@ -9,103 +9,235 @@ import {
   TouchableOpacity,
   Text,
   Alert,
+  StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { styles } from './styles';
-import { formatSearchResponse, formatNetworkError } from './responseFormatter';
-import { ApiService } from '../../services/api';
+import { formatSearchResponse, formatNetworkError, FormattedResponse } from './responseFormatter';
+import { ApiService } from '../../services/api.ts';
+import { SearchFrom } from '../../services/types.ts';
 import { ActionsModal } from '../../components/ActionsModal';
-import { CodeForm } from './CodeForm';
+
+
 export const SearchScreen = () => {
-  const [code, setCode] = useState('');
+  const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [formattedResponse, setFormattedResponse] = useState<any>(null);
-  const [showActionButton, setShowActionButton] = useState(false);
+  const [formattedResponse, setFormattedResponse] = useState<FormattedResponse | null>(null);
   const [showActionsModal, setShowActionsModal] = useState(false);
   const [boxNumber, setBoxNumber] = useState<number | undefined>();
   const [palletNumber, setPalletNumber] = useState<number | undefined>();
+  const [lastSearchResult, setLastSearchResult] = useState<any>(null);
   const inputRef = useRef<TextInput>(null);
-  const [CodeForDel, setCodeForDel] = useState<any>([]);
-  const [open, setOpen] = useState(false);
-  const [openForm, setOpenForm] = useState(false);
+  const [codeForDel, setCodeForDel] = useState<any[]>([]);
+  const [showCodeActions, setShowCodeActions] = useState(false);
+  const [scanKey, setScanKey] = useState(0);
+  const [addToBoxNumber, setAddToBoxNumber] = useState('');
+  const [addToPalletNumber, setAddToPalletNumber] = useState('');
+
+  // Состояния для дополнительного поля сканирования нового кода
+  const [newCodeInput, setNewCodeInput] = useState('');
+  const newCodeInputRef = useRef<TextInput>(null);
+  const [isAddingCode, setIsAddingCode] = useState(false);
 
   const clearAllStates = () => {
-    setCode(() => '');
+    setInputValue('');
     setIsLoading(false);
     setFormattedResponse(null);
-    setShowActionButton(false);
     setShowActionsModal(false);
     setBoxNumber(undefined);
     setPalletNumber(undefined);
     setCodeForDel([]);
-
-    // Опционально: очистить input поле
-    if (inputRef.current) {
-      inputRef.current.clear();
-      // или inputRef.current.setNativeProps({ text: '' });
-    }
+    setLastSearchResult(null);
+    setShowCodeActions(false);
+    setAddToBoxNumber('');
+    setAddToPalletNumber('');
+    setNewCodeInput('');
+    setScanKey(prev => prev + 1);
   };
-  // Автофокус при загрузке экрана
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 300);
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 100);
     return () => clearTimeout(timer);
-  }, []);
+  }, [scanKey]);
 
-  // Обработка отправки кода при нажатии Enter
   const handleSubmit = async () => {
-    const trimmedCode = code.trim();
-    if (!trimmedCode) return;
+    const trimmedValue = inputValue.trim();
+    if (!trimmedValue) return;
 
-    setCode('');
+    setInputValue('');
     setIsLoading(true);
-    setShowActionButton(false);
     setFormattedResponse(null);
-    if (inputRef.current) {
-      inputRef.current.setNativeProps({ text: '' });
-    }
+    setLastSearchResult(null);
+    setShowCodeActions(false);
+
     try {
-      const result = await ApiService.searchCode(trimmedCode);
-      setBoxNumber(result.data?.box_number);
-      setPalletNumber(result.data?.pallet_number);
-      setCodeForDel([
-        { code: result.data?.code, boxNumber: result.data?.box_number },
-      ]);
-      //            ^ без spread, просто объект в массиве
+      const result = await ApiService.searchCode(trimmedValue);
+      console.log('Результат поиска:', JSON.stringify(result, null, 2));
+
+      setLastSearchResult(result);
+
       const formatted = formatSearchResponse(result);
-      console.log(formattedResponse, ']]]]]]]]]]]]', result);
       setFormattedResponse(formatted);
 
-      setShowActionButton(formatted.showActionButton || false);
+      if (result && result.code && !result.message) {
+        const codeEntity = result.code;
+
+        if (codeEntity.box_number) {
+          setBoxNumber(codeEntity.box_number);
+          setAddToBoxNumber(codeEntity.box_number.toString());
+        }
+        if (codeEntity.pallet_number) {
+          setPalletNumber(codeEntity.pallet_number);
+          setAddToPalletNumber(codeEntity.pallet_number.toString());
+        }
+
+        if ((result.from === SearchFrom.Code || result.from === 'code') && codeEntity.code) {
+          setCodeForDel([{
+            code: codeEntity.code,
+            boxNumber: codeEntity.box_number || 0,
+          }]);
+        }
+      } else {
+        setBoxNumber(undefined);
+        setPalletNumber(undefined);
+        setCodeForDel([]);
+      }
 
       Toast.show({
-        type: formatted.type,
-        text1: formatted.title,
-        text2: formatted.message,
+        type: formatted.type || 'info',
+        text1: formatted.title || 'Результат',
+        text2: formatted.message || 'Нет данных',
         position: 'bottom',
-        visibilityTime: 5000,
-        text1Style: {
-          fontSize: 16,
-          fontWeight: 'bold',
-        },
-        text2Style: {
-          fontSize: 14,
-          lineHeight: 18,
-        },
+        visibilityTime: formatted.type === 'error' ? 3000 : 5000,
+        text1Style: { fontSize: 16, fontWeight: 'bold' },
+        text2Style: { fontSize: 14, lineHeight: 18 },
       });
+
     } catch (error) {
-      console.log(error, '..............');
-      const formatted = formatNetworkError();
-      Toast.show({
-        type: formatted.type,
-        text1: formatted.title,
-        text2: formatted.message,
-        position: 'bottom',
-        visibilityTime: 3000,
-      });
+      console.log('Ошибка поиска:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+
+      if (errorMessage.includes('таблица') && errorMessage.includes('не существует')) {
+        const formatted: FormattedResponse = {
+          title: 'ℹ️ Информация',
+          message: 'Фасовка не начата. Обратитесь к оператору для начала фасовки.',
+          type: 'info',
+          showActionButton: false,
+        };
+        setFormattedResponse(formatted);
+
+        Toast.show({
+          type: 'info',
+          text1: 'ℹ️ Информация',
+          text2: 'Фасовка не начата',
+          position: 'bottom',
+          visibilityTime: 3000,
+        });
+      } else {
+        const formatted = formatNetworkError();
+        setFormattedResponse(formatted);
+
+        Toast.show({
+          type: 'error',
+          text1: '❌ Ошибка',
+          text2: errorMessage,
+          position: 'bottom',
+          visibilityTime: 3000,
+        });
+      }
+
+      setBoxNumber(undefined);
+      setPalletNumber(undefined);
+      setCodeForDel([]);
+      setLastSearchResult(null);
+
     } finally {
       setIsLoading(false);
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
+    }
+  };
+
+  // Добавление нового кода в текущую коробку
+  const handleAddNewCode = async () => {
+    const newCode = newCodeInput.trim();
+    if (!newCode) {
+      Alert.alert('Ошибка', 'Введите или отсканируйте код');
+      return;
+    }
+
+    const targetBox = boxNumber || parseInt(addToBoxNumber, 10);
+    if (!targetBox) {
+      Alert.alert('Ошибка', 'Не указан номер коробки');
+      return;
+    }
+
+    const targetPallet = palletNumber || (addToPalletNumber ? parseInt(addToPalletNumber, 10) : null);
+
+    setIsAddingCode(true);
+    try {
+      const result = await ApiService.addCodeToBox(
+        newCode,
+        targetBox,
+        targetPallet,
+      );
+
+      console.log('Результат добавления нового кода:', result);
+
+      if (
+        result.success !== false &&
+        result.message !== 'Код уже существует' &&
+        result.message !== 'Достигнут лимит коробки'
+      ) {
+        setNewCodeInput('');
+
+        Alert.alert(
+          '✅ Успешно',
+          `Код добавлен в коробку №${targetBox}${
+            targetPallet ? `, паллета №${targetPallet}` : ''
+          }`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setTimeout(() => {
+                  if (newCodeInputRef.current) {
+                    newCodeInputRef.current.focus();
+                  }
+                }, 300);
+              },
+            },
+          ],
+        );
+      } else {
+        setNewCodeInput('');
+        Alert.alert('❌ Ошибка', result.message || 'Не удалось добавить код', [
+          {
+            text: 'OK',
+            onPress: () => {
+              setTimeout(() => {
+                if (newCodeInputRef.current) {
+                  newCodeInputRef.current.focus();
+                }
+              }, 300);
+            },
+          },
+        ]);
+      }
+    } catch (error) {
+      setNewCodeInput('');
+      console.error('Ошибка добавления кода:', error);
+      Alert.alert('❌ Ошибка', 'Не удалось добавить код');
+    } finally {
+      setIsAddingCode(false);
     }
   };
 
@@ -113,72 +245,138 @@ export const SearchScreen = () => {
     if (formattedResponse?.searchData) {
       setShowActionsModal(true);
     }
-    console.log(showActionsModal, 12412412141, formattedResponse.searchData);
   };
 
-  // Коллбек при успешном удалении коробки
   const handleDeleteSuccess = () => {
-    // Скрываем кнопку действия после удаления
-    setShowActionButton(false);
     setFormattedResponse(null);
+    setLastSearchResult(null);
+    setShowCodeActions(false);
+    setShowActionsModal(false);
+    setNewCodeInput('');
 
-    // Показываем сообщение в Toast
     Toast.show({
       type: 'success',
-      text1: '✅ Коробка удалена',
-      text2: 'Коробка успешно удалена из системы',
+      text1: '✅ Операция выполнена',
+      text2: 'Операция успешно завершена',
       position: 'bottom',
       visibilityTime: 4000,
     });
-  };
-  const PrintBox = async () => {
-    const countinbox = await ApiService.searchByBoxNumber(boxNumber);
-    console.log(countinbox, '}]]]]]]]]]]]]]]]');
-    ApiService.PrintBox(boxNumber, countinbox.length);
-    console.log(formattedResponse, boxNumber);
-  };
-  const PrintBoxPallet = async () => {
-    if (formattedResponse.searchData.type === 'box') {
-      PrintBox();
-    } else if (formattedResponse.searchData.type === 'pallet') {
-      PrintPallet();
-    }
-  };
-  const PrintPallet = async () => {
-    if (!palletNumber) {
-      Alert.alert('Ошибка', 'Пожалуйста, укажите номер паллеты');
-      return;
-    }
-    const countinbPallet = await ApiService.getProductCountInPallet(
-      palletNumber,
-    );
-    const allPallet = await ApiService.getAllPallets();
-    const countIn = allPallet.data.find((el: any) => {
-      if (el.pallet_number === palletNumber) {
-        return el.box_count;
+
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
       }
-    });
-    console.log(countinbPallet, '}]]]]]]]]]]]]]]]');
-    ApiService.PrintPallet(
-      palletNumber,
-      +countIn.box_count,
-      countinbPallet.count,
-    );
-    console.log(formattedResponse, boxNumber);
+    }, 500);
   };
 
-  const deleteCod = async () => {
-    console.log(CodeForDel, 'yyyyyyyyyyyyyyyyyyyyyyyyyyyy');
-    clearAllStates();
-    const res = await ApiService.deleteCodes(CodeForDel);
-    Alert.alert(res.message);
-    setCodeForDel([]);
+  const handlePrintBox = async () => {
+    const currentBoxNumber = boxNumber || parseInt(addToBoxNumber, 10);
+    if (!currentBoxNumber) {
+      Alert.alert('Ошибка', 'Номер коробки не найден');
+      return;
+    }
+
+    try {
+      const boxData = await ApiService.searchByBoxNumber(currentBoxNumber);
+      if (boxData && boxData.length > 0) {
+        await ApiService.PrintBox(currentBoxNumber, boxData.length);
+        Alert.alert('✅ Успешно', 'Этикетка коробки отправлена на печать');
+      } else {
+        Alert.alert('❌ Ошибка', 'Не удалось получить данные коробки');
+      }
+    } catch (error) {
+      console.error('Ошибка печати коробки:', error);
+      Alert.alert('❌ Ошибка', 'Не удалось напечатать этикетку коробки');
+    }
   };
+
+  const handlePrintPallet = async () => {
+    const currentPalletNumber = palletNumber || (addToPalletNumber ? parseInt(addToPalletNumber, 10) : undefined);
+    if (!currentPalletNumber) {
+      Alert.alert('Ошибка', 'Номер паллеты не найден');
+      return;
+    }
+
+    try {
+      const productCountResult = await ApiService.getProductCountInPallet(currentPalletNumber);
+      const allPallets = await ApiService.getAllPallets();
+
+      let boxCount = 0;
+      if (allPallets && allPallets.data) {
+        const palletData = allPallets.data.find(
+          (el: any) => el.pallet_number === currentPalletNumber,
+        );
+        if (palletData) {
+          boxCount = parseInt(palletData.box_count, 10) || 0;
+        }
+      }
+
+      await ApiService.PrintPallet(
+        currentPalletNumber,
+        boxCount,
+        productCountResult.count || 0,
+      );
+
+      Alert.alert('✅ Успешно', 'Этикетка паллеты отправлена на печать');
+    } catch (error) {
+      console.error('Ошибка печати паллеты:', error);
+      Alert.alert('❌ Ошибка', 'Не удалось напечатать этикетку паллеты');
+    }
+  };
+
+  const handlePrintBoxPallet = async () => {
+    if (!lastSearchResult) return;
+
+    const searchFrom = lastSearchResult.from;
+
+    if (searchFrom === SearchFrom.Box || searchFrom === 'box') {
+      await handlePrintBox();
+    } else if (searchFrom === SearchFrom.Pallet || searchFrom === 'pallet') {
+      await handlePrintPallet();
+    } else {
+      Alert.alert('Ошибка', 'Неизвестный тип для печати');
+    }
+  };
+
+  const handleDeleteCode = () => {
+    if (!codeForDel || codeForDel.length === 0) {
+      Alert.alert('Ошибка', 'Нет кодов для удаления');
+      return;
+    }
+
+    Alert.alert(
+      '🗑️ Удаление кода',
+      'Вы уверены, что хотите удалить этот код?',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await ApiService.deleteCodes(codeForDel);
+              Alert.alert('Результат', res.message || 'Операция завершена');
+              clearAllStates();
+            } catch (error) {
+              console.error('Ошибка удаления кодов:', error);
+              Alert.alert('Ошибка', 'Не удалось удалить коды');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const searchFrom = lastSearchResult?.from;
+  const isCodeType = searchFrom === SearchFrom.Code || searchFrom === 'code';
+  const isBoxType = searchFrom === SearchFrom.Box || searchFrom === 'box';
+  const isPalletType = searchFrom === SearchFrom.Pallet || searchFrom === 'pallet';
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <View style={styles.screenHeader}>
         <Text style={styles.screenTitle}>Поиск</Text>
@@ -189,17 +387,16 @@ export const SearchScreen = () => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
+          {/* Основное поле ввода для поиска */}
           <View style={styles.centerContainer}>
             <TextInput
+              key={scanKey}
               ref={inputRef}
-              style={[
-                styles.searchInput,
-                isLoading && styles.searchInputDisabled,
-              ]}
-              value=""
-              onChangeText={setCode}
+              style={[styles.searchInput, isLoading && styles.searchInputDisabled]}
+              onChangeText={setInputValue}
+              value={inputValue}
               onSubmitEditing={handleSubmit}
-              placeholder={isLoading ? 'Поиск...' : 'Введите код'}
+              placeholder={isLoading ? 'Поиск...' : 'Отсканируйте или введите код'}
               placeholderTextColor="#999"
               autoCapitalize="characters"
               autoCorrect={false}
@@ -208,58 +405,192 @@ export const SearchScreen = () => {
               blurOnSubmit={false}
               editable={!isLoading}
             />
+            {isLoading && (
+              <ActivityIndicator
+                style={styles.loader}
+                size="small"
+                color="#007AFF"
+              />
+            )}
           </View>
-          {formattedResponse?.searchData?.type === 'code' ? (
-            <View style={styles.actionButtonContainer}>
+
+          {/* Информация о результате */}
+          {formattedResponse && (
+            <View style={[
+              styles.resultContainer,
+              formattedResponse.type === 'success' && styles.resultSuccess,
+              formattedResponse.type === 'error' && styles.resultError,
+              formattedResponse.type === 'info' && styles.resultInfo,
+            ]}>
+              <Text style={styles.resultTitle}>{formattedResponse.title}</Text>
+              <Text style={styles.resultMessage}>{formattedResponse.message}</Text>
+            </View>
+          )}
+
+          {/* Кнопки действий */}
+          {formattedResponse?.searchData && (
+            <>
+              {/* Действия с кодом */}
+              {isCodeType && (
+                <>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => {
+                      setShowCodeActions(!showCodeActions);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      {showCodeActions ? 'Скрыть действия' : 'Действия с кодом'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showCodeActions && (
+                    <View style={styles.codeActionsContainer}>
+                      {/* Дополнительное поле для сканирования нового кода */}
+                      <View style={styles.addCodeSection}>
+                        <Text style={styles.addCodeSectionTitle}>
+                          Добавить код в коробку
+                          {boxNumber ? ` №${boxNumber}` : ''}
+                          {palletNumber ? `, паллета №${palletNumber}` : ''}
+                        </Text>
+
+                        <View style={styles.addCodeInputContainer}>
+                          <TextInput
+                            ref={newCodeInputRef}
+                            style={styles.addCodeInput}
+                            value={newCodeInput}
+                            onChangeText={setNewCodeInput}
+                            placeholder="Отсканируйте новый код"
+                            placeholderTextColor="#999"
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            returnKeyType="done"
+                            onSubmitEditing={handleAddNewCode}
+                            editable={!isAddingCode}
+                          />
+                          <TouchableOpacity
+                            style={[
+                              styles.addCodeButton,
+                              (!newCodeInput.trim() || isAddingCode) && styles.addCodeButtonDisabled,
+                            ]}
+                            onPress={handleAddNewCode}
+                            disabled={!newCodeInput.trim() || isAddingCode}
+                          >
+                            {isAddingCode ? (
+                              <ActivityIndicator size="small" color="white" />
+                            ) : (
+                              <Text style={styles.addCodeButtonText}>+</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Печать этикетки коробки */}
+                      {boxNumber && (
+                        <TouchableOpacity
+                          style={styles.secondaryButton}
+                          onPress={handlePrintBox}
+                        >
+                          <Text style={styles.actionButtonText}>
+                            Печать этикетки коробки
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Печать этикетки паллеты */}
+                      {palletNumber && (
+                        <TouchableOpacity
+                          style={styles.secondaryButton}
+                          onPress={handlePrintPallet}
+                        >
+                          <Text style={styles.actionButtonText}>
+                            Печать этикетки паллеты
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Удаление кода */}
+                      <TouchableOpacity
+                        style={styles.dangerButton}
+                        onPress={handleDeleteCode}
+                      >
+                        <Text style={styles.actionButtonText}>
+                          Удалить код
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* Действия с коробкой */}
+              {isBoxType && (
+                <>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={handleActionButtonPress}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      {formattedResponse.actionButtonText || 'Действия с коробкой'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.printButton}
+                    onPress={handlePrintBoxPallet}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      Печать этикетки коробки
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* Действия с паллетой */}
+              {isPalletType && (
+                <>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={handleActionButtonPress}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      {formattedResponse.actionButtonText || 'Действия с паллетой'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.printButton}
+                    onPress={handlePrintBoxPallet}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      Печать этикетки паллеты
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* Кнопка очистки */}
               <TouchableOpacity
-                style={styles.actionButton}
+                style={styles.clearButton}
                 onPress={() => {
-                  setOpen(prev => !prev);
+                  setNewCodeInput('');
+                  clearAllStates();
                 }}
                 activeOpacity={0.7}
-                accessible={false}
               >
-                <Text style={styles.actionButtonText}>Действия с кодом</Text>
+                <Text style={styles.clearButtonText}>✕ Очистить</Text>
               </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {showActionButton && formattedResponse && (
-            <View style={styles.actionButtonContainer}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={handleActionButtonPress}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.actionButtonText}>
-                  {formattedResponse.actionButtonText}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            </>
           )}
-          {showActionButton && formattedResponse && (
-            <View style={styles.actionButtonContainer}>
-              <TouchableOpacity
-                style={styles.actionButtonPrint}
-                onPress={PrintBoxPallet}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.actionButtonText}>Печать Этикетки</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {formattedResponse?.searchData?.type === 'code' && open ? (
-            <CodeForm
-              PrintBox={PrintBox}
-              PrintPallet={PrintPallet}
-              deleteCod={deleteCod}
-              palletNumber={palletNumber}
-              boxNumber={boxNumber}
-            />
-          ) : null}
         </View>
       </ScrollView>
 
+      {/* Модальное окно действий */}
       {formattedResponse?.searchData && (
         <ActionsModal
           visible={showActionsModal}
@@ -268,6 +599,237 @@ export const SearchScreen = () => {
           onDeleteSuccess={handleDeleteSuccess}
         />
       )}
+
+      <Toast />
     </KeyboardAvoidingView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  screenHeader: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 16,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  screenTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 40,
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  centerContainer: {
+    marginBottom: 20,
+    position: 'relative',
+  },
+  searchInput: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    fontSize: 18,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    color: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchInputDisabled: {
+    backgroundColor: '#f0f0f0',
+    borderColor: '#ccc',
+    opacity: 0.7,
+  },
+  loader: {
+    position: 'absolute',
+    right: 16,
+    top: 18,
+  },
+  resultContainer: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+  },
+  resultSuccess: {
+    backgroundColor: '#f0fff4',
+    borderLeftColor: '#34C759',
+  },
+  resultError: {
+    backgroundColor: '#fff5f5',
+    borderLeftColor: '#FF3B30',
+  },
+  resultInfo: {
+    backgroundColor: '#f0f8ff',
+    borderLeftColor: '#007AFF',
+  },
+  resultTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  resultMessage: {
+    fontSize: 15,
+    color: '#555',
+    lineHeight: 22,
+  },
+  actionButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  secondaryButton: {
+    backgroundColor: '#5856D6',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  printButton: {
+    backgroundColor: '#34C759',
+    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dangerButton: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  clearButton: {
+    backgroundColor: '#8E8E93',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  clearButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  codeActionsContainer: {
+    marginBottom: 10,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  // Стили для секции добавления нового кода
+  addCodeSection: {
+    backgroundColor: '#f0fff4',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  addCodeSectionTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2d8a4e',
+    marginBottom: 8,
+  },
+  addCodeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  addCodeInput: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#34C759',
+    color: '#333',
+    marginRight: 8,
+  },
+  addCodeButton: {
+    backgroundColor: '#34C759',
+    borderRadius: 8,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addCodeButtonDisabled: {
+    backgroundColor: '#a0d8b0',
+  },
+  addCodeButtonText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  // Стили для формы изменения коробки
+  addToBoxForm: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  formLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  formInput: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+});
