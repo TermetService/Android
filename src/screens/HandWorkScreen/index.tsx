@@ -1,5 +1,5 @@
 // src/screens/HandWorkScreen.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -16,13 +16,15 @@ export const HandWorkScreen = () => {
 
   const startHandWork = async () => {
     setShowManualModal(true);
-    // Убрали await ApiService.startPause();
   };
 
   const stopHandWork = async () => {
     setShowManualModal(false);
-    // Убрали await ApiService.continuedWork();
   };
+
+  useEffect(() => {
+    startHandWork();
+  }, []);
 
   return (
     <>
@@ -52,10 +54,7 @@ export const HandWorkScreen = () => {
       </KeyboardAvoidingView>
 
       {/* Модальное окно "Режим ручной работы" */}
-      <ManualWorkModal
-        visible={showManualModal}
-        onClose={stopHandWork}
-      />
+      <ManualWorkModal visible={showManualModal} onClose={stopHandWork} />
     </>
   );
 };

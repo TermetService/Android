@@ -16,4 +16,5 @@ export interface SearchResponse {
   };
   from?: 'code' | 'box' | 'pallet';
   message?: string;
+  countIn?: number;
 }

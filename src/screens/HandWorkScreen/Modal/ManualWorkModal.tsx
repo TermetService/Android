@@ -119,24 +119,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
     }
   }, [visible]);
 
-  useEffect(() => {
-    const get = async () => {
-      const result = await ApiService.getCounts();
-      if (result) {
-        console.log('--------------------res', result.data);
-        if (result.data) {
-          setBoxInfo({
-            boxNumber: +result.data.lastBoxNumber,
-            palletNumber: +result.data.lastPalletNumber,
-            productsInBox: +result.data.productsInBox,
-            limitProductsInBox: parseInt(result.data.limitProductsInBox) || 2,
-          });
-        }
-      }
-    };
-    get();
-  }, []);
-
   // Обработка очереди
   useEffect(() => {
     const processQueue = async () => {

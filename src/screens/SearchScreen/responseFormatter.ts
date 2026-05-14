@@ -1,124 +1,213 @@
-import { SearchResponse } from '../../services/types';
+// src/screens/responseFormatter.ts
+import { SearchFrom, SearchResponse } from '../../services/types';
 
 export interface FormattedResponse {
   title: string;
   message: string;
   type: 'success' | 'error' | 'info';
-  showActionButton?: boolean; // Показывать ли кнопку действия
-  actionButtonText?: string; // Текст на кнопке
-  searchData?: any; // Данные поиска для передачи в действие
+  showActionButton: boolean;
+  actionButtonText?: string;
+  searchData?: {
+    type: 'code' | 'box' | 'pallet';
+    boxNumber?: number;
+    palletNumber?: number;
+    boxLabel?: string | null;
+    palletLabel?: string | null;
+    id?: number;
+    code?: string;
+    countIn?: number;
+  };
 }
 
-/**
- * Форматирует ответ от сервера поиска в удобный для отображения вид
- */
 export const formatSearchResponse = (result: any): FormattedResponse => {
-  // Проверяем статус ответа от сервера
-  if (result.status === 'found') {
-    // Определяем тип найденного кода
-    const codeType = result.codeType;
-    const data = result.data;
+  console.log('Форматирование ответа:', JSON.stringify(result, null, 2));
 
-    if (codeType === 'code' && data) {
+  if (!result) {
+    return {
+      title: '❌ Ошибка',
+      message: 'Пустой ответ от сервера',
+      type: 'error',
+      showActionButton: false,
+    };
+  }
+
+  // Проверяем ошибку "Фасовка не начата"
+  if (
+    result.message === 'Фасовка не начата' ||
+    result.error === 'TABLE_NOT_EXISTS'
+  ) {
+    return {
+      title: 'ℹ️ Информация',
+      message: 'Фасовка не начата. Обратитесь к оператору для начала фасовки.',
+      type: 'info',
+      showActionButton: false,
+    };
+  }
+
+  // Проверяем сообщение об ошибке (код не найден, коробка не найдена и т.д.)
+  if (result.message) {
+    // Проверяем на ошибки таблицы
+    if (
+      result.message.includes('Таблица') &&
+      result.message.includes('не существует')
+    ) {
+      return {
+        title: 'ℹ️ Информация',
+        message:
+          'Фасовка не начата. Обратитесь к оператору для начала фасовки.',
+        type: 'info',
+        showActionButton: false,
+      };
+    }
+
+    // Определяем тип сообщения
+    const isNotFound =
+      result.message.toLowerCase().includes('Cannot read') ||
+      result.message.toLowerCase().includes('read') ||
+      result.message.toLowerCase().includes('not found');
+
+    const isError =
+      result.message.toLowerCase().includes('ошибка') ||
+      result.message.toLowerCase().includes('error');
+
+    if (isNotFound) {
+      return {
+        title: '❌ Не найдено',
+        message: 'Ошибка связана с неправильным кодом или сервером.',
+        type: 'error',
+        showActionButton: false,
+      };
+    }
+
+    if (isError) {
+      return {
+        title: '❌ Ошибка',
+        message: result.message,
+        type: 'error',
+        showActionButton: false,
+      };
+    }
+
+    // Обычное информационное сообщение
+    return {
+      title: 'ℹ️ Информация',
+      message: result.message,
+      type: 'info',
+      showActionButton: false,
+    };
+  }
+
+  // Проверяем наличие code и from
+  if (!result.code) {
+    return {
+      title: '⚠️ Ошибка данных',
+      message: 'Сервер вернул некорректные данные',
+      type: 'error',
+      showActionButton: false,
+    };
+  }
+
+  // Безопасно извлекаем данные из code
+  const codeEntity = result.code || {};
+  const from = result.from;
+  const countIn = result.countIn || 0;
+
+  // Проверяем from
+  if (!from) {
+    return {
+      title: '⚠️ Неизвестный тип',
+      message: 'Не удалось определить тип найденного объекта',
+      type: 'error',
+      showActionButton: false,
+    };
+  }
+
+  switch (from) {
+    case SearchFrom.Code:
       return {
         title: '✅ Код найден',
-        message: `В коробке №${data.box_number} на паллете №${data.pallet_number}`,
+        message:
+          `Код: ${codeEntity.code || 'Неизвестно'}\n` +
+          `Коробка: ${codeEntity.box_number || 'Не назначена'}\n` +
+          `Паллета: ${codeEntity.pallet_number || 'Не назначена'}\n` +
+          `Кодов в коробке: ${countIn}`,
         type: 'success',
         showActionButton: false,
         searchData: {
           type: 'code',
-          boxNumber: data.box_number,
-          boxLabel: data.box_label,
-          palletNumber: data.pallet_number,
-          id: data.id,
+          boxNumber: codeEntity.box_number,
+          palletNumber: codeEntity.pallet_number,
+          boxLabel: codeEntity.box_label || null,
+          palletLabel: codeEntity.pallet_label || null,
+          id: codeEntity.id,
+          code: codeEntity.code,
+          countIn,
         },
       };
-    }
 
-    if (codeType === 'box' && data) {
+    case SearchFrom.Box:
       return {
-        title: '✅ Коробка найдена',
-        message: `Коробка №${data.box_number} находится на паллете №${data.pallet_number}`,
+        title: '📦 Коробка найдена',
+        message:
+          `Номер коробки: ${codeEntity.box_number || 'Неизвестно'}\n` +
+          `Кодов в коробке: ${countIn}\n` +
+          (codeEntity.pallet_number
+            ? `Паллета: ${codeEntity.pallet_number}`
+            : 'Не на паллете'),
         type: 'success',
         showActionButton: true,
-        actionButtonText: 'Действия с коробкой',
+        actionButtonText: `Действия с коробкой #${codeEntity.box_number || ''}`,
         searchData: {
           type: 'box',
-          boxNumber: data.box_number,
-          boxLabel: data.box_label,
-          palletNumber: data.pallet_number,
-          id: data.id,
+          boxNumber: codeEntity.box_number,
+          palletNumber: codeEntity.pallet_number,
+          boxLabel: codeEntity.box_label || null,
+          palletLabel: codeEntity.pallet_label || null,
+          id: codeEntity.id,
+          code: codeEntity.code,
+          countIn,
         },
       };
-    }
 
-    if (codeType === 'pallet' && data) {
+    case SearchFrom.Pallet:
       return {
-        title: `✅ Паллета №${data.pallet_number} найдена`,
-        message: ``,
+        title: 'Паллета найдена',
+        message:
+          `Номер паллеты: ${codeEntity.pallet_number || 'Неизвестно'}\n` +
+          `Общее количество единиц: ${countIn}\n`   +
+          `Коробка: ${codeEntity.box_number || 'Неизвестно'}`,
         type: 'success',
         showActionButton: true,
-        actionButtonText: 'Действия с паллетой',
+        actionButtonText: `Действия с паллетой #${
+          codeEntity.pallet_number || ''
+        }`,
         searchData: {
           type: 'pallet',
-          boxNumber: data.box_number,
-          palletNumber: data.pallet_number,
-          id: data.id,
+          boxNumber: codeEntity.box_number,
+          palletNumber: codeEntity.pallet_number,
+          boxLabel: codeEntity.box_label || null,
+          palletLabel: codeEntity.pallet_label || null,
+          id: codeEntity.id,
+          code: codeEntity.code,
+          countIn,
         },
       };
-    }
+
+    default:
+      return {
+        title: '✅ Найдено',
+        message: `Тип: ${from}\nКод: ${codeEntity.code || 'Неизвестно'}`,
+        type: 'success',
+        showActionButton: false,
+      };
   }
-
-  // Обработка статуса not_found
-  if (result.status === 'not_found') {
-    return {
-      title: '❌ Не найдено',
-      message: result.message || 'Запись не найдена в системе',
-      type: 'error',
-      showActionButton: false,
-    };
-  }
-
-  // Обработка статуса invalid_format
-  if (result.status === 'invalid_format') {
-    return {
-      title: '⚠️ Неверный формат',
-      message: result.message || 'Неверный формат кода',
-      type: 'error',
-      showActionButton: false,
-    };
-  }
-
-  // Если есть сообщение об ошибке
-  if (result.message) {
-    const hasError =
-      result.message.toLowerCase().includes('ошибка') ||
-      result.status === 'error';
-
-    return {
-      title: hasError ? '⚠️ Ошибка' : 'ℹ️ Информация',
-      message: result.message,
-      type: hasError ? 'error' : 'info',
-      showActionButton: false,
-    };
-  }
-
-  // Неизвестный формат ответа
-  return {
-    title: '⚠️ Неизвестный ответ',
-    message: 'Сервер вернул неизвестный формат данных',
-    type: 'error',
-    showActionButton: false,
-  };
 };
 
-/**
- * Форматирует ошибку сети
- */
 export const formatNetworkError = (): FormattedResponse => {
   return {
     title: '❌ Ошибка соединения',
-    message: 'Проверьте подключение к интернету',
+    message:
+      'Не удалось подключиться к серверу. Проверьте подключение к интернету.',
     type: 'error',
     showActionButton: false,
   };
