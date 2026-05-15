@@ -8,11 +8,8 @@ export interface FormattedResponse {
   showActionButton: boolean;
   actionButtonText?: string;
   searchData?: {
-    type: 'code' | 'box' | 'pallet';
-    boxNumber?: number;
+    type: 'code';
     palletNumber?: number;
-    boxLabel?: string | null;
-    palletLabel?: string | null;
     id?: number;
     code?: string;
     countIn?: number;
@@ -128,71 +125,16 @@ export const formatSearchResponse = (result: any): FormattedResponse => {
         title: '✅ Код найден',
         message:
           `Код: ${codeEntity.code || 'Неизвестно'}\n` +
-          `Коробка: ${codeEntity.box_number || 'Не назначена'}\n` +
-          `Паллета: ${codeEntity.pallet_number || 'Не назначена'}\n` +
-          `Кодов в коробке: ${countIn}`,
+          `Код существует в текущей фасовке\n`,
         type: 'success',
         showActionButton: false,
         searchData: {
           type: 'code',
-          boxNumber: codeEntity.box_number,
-          palletNumber: codeEntity.pallet_number,
-          boxLabel: codeEntity.box_label || null,
-          palletLabel: codeEntity.pallet_label || null,
           id: codeEntity.id,
           code: codeEntity.code,
           countIn,
         },
       };
-
-    case SearchFrom.Box:
-      return {
-        title: '📦 Коробка найдена',
-        message:
-          `Номер коробки: ${codeEntity.box_number || 'Неизвестно'}\n` +
-          `Кодов в коробке: ${countIn}\n` +
-          (codeEntity.pallet_number
-            ? `Паллета: ${codeEntity.pallet_number}`
-            : 'Не на паллете'),
-        type: 'success',
-        showActionButton: true,
-        actionButtonText: `Действия с коробкой #${codeEntity.box_number || ''}`,
-        searchData: {
-          type: 'box',
-          boxNumber: codeEntity.box_number,
-          palletNumber: codeEntity.pallet_number,
-          boxLabel: codeEntity.box_label || null,
-          palletLabel: codeEntity.pallet_label || null,
-          id: codeEntity.id,
-          code: codeEntity.code,
-          countIn,
-        },
-      };
-
-    case SearchFrom.Pallet:
-      return {
-        title: 'Паллета найдена',
-        message:
-          `Номер паллеты: ${codeEntity.pallet_number || 'Неизвестно'}\n` +
-          `Общее количество единиц: ${countIn}\n`   +
-          `Коробка: ${codeEntity.box_number || 'Неизвестно'}`,
-        type: 'success',
-        showActionButton: true,
-        actionButtonText: `Действия с паллетой #${
-          codeEntity.pallet_number || ''
-        }`,
-        searchData: {
-          type: 'pallet',
-          boxNumber: codeEntity.box_number,
-          palletNumber: codeEntity.pallet_number,
-          boxLabel: codeEntity.box_label || null,
-          palletLabel: codeEntity.pallet_label || null,
-          id: codeEntity.id,
-          code: codeEntity.code,
-          countIn,
-        },
-      };
-
     default:
       return {
         title: '✅ Найдено',

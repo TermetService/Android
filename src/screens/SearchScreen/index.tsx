@@ -13,16 +13,21 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { formatSearchResponse, formatNetworkError, FormattedResponse } from './responseFormatter';
+import {
+  formatSearchResponse,
+  formatNetworkError,
+  FormattedResponse,
+} from './responseFormatter';
 import { ApiService } from '../../services/api.ts';
 import { SearchFrom } from '../../services/types.ts';
 import { ActionsModal } from '../../components/ActionsModal';
-
+import { Config } from '../../config';
 
 export const SearchScreen = () => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [formattedResponse, setFormattedResponse] = useState<FormattedResponse | null>(null);
+  const [formattedResponse, setFormattedResponse] =
+    useState<FormattedResponse | null>(null);
   const [showActionsModal, setShowActionsModal] = useState(false);
   const [boxNumber, setBoxNumber] = useState<number | undefined>();
   const [palletNumber, setPalletNumber] = useState<number | undefined>();
@@ -38,6 +43,12 @@ export const SearchScreen = () => {
   const [newCodeInput, setNewCodeInput] = useState('');
   const newCodeInputRef = useRef<TextInput>(null);
   const [isAddingCode, setIsAddingCode] = useState(false);
+
+  // Состояния для пинга сервера
+  const [serverStatus, setServerStatus] = useState<
+    'checking' | 'online' | 'offline'
+  >('checking');
+  const serverUrl = Config.SERVER_URL;
 
   const clearAllStates = () => {
     setInputValue('');
@@ -55,14 +66,84 @@ export const SearchScreen = () => {
     setScanKey(prev => prev + 1);
   };
 
+  // Функция пинга сервера
+  const pingServer = async () => {
+    try {
+      setServerStatus('checking');
+      const startTime = Date.now();
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+      const response = await fetch(`${serverUrl}/code/ping`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const pingTime = Date.now() - startTime;
+        console.log(`Пинг сервера: ${pingTime}ms`);
+        setServerStatus('online');
+      } else {
+        setServerStatus('offline');
+      }
+    } catch (error) {
+      console.log('Ошибка пинга сервера:', error);
+      setServerStatus('offline');
+    }
+  };
+
   useEffect(() => {
+    // Инициализация пинга при загрузке экрана
+    pingServer();
+
+    // Периодический пинг каждые 30 секунд
+    const intervalId = setInterval(pingServer, 30000);
+
+    // Фокус на поле ввода
     const timer = setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
       }
     }, 100);
-    return () => clearTimeout(timer);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(intervalId);
+    };
   }, [scanKey]);
+
+  // Получение цвета и иконки для статуса сервера
+  const getServerStatusIcon = () => {
+    switch (serverStatus) {
+      case 'online':
+        return '🟢';
+      case 'offline':
+        return '🔴';
+      case 'checking':
+        return '🟡';
+      default:
+        return '⚪';
+    }
+  };
+
+  const getServerStatusColor = () => {
+    switch (serverStatus) {
+      case 'online':
+        return '#34C759';
+      case 'offline':
+        return '#FF3B30';
+      case 'checking':
+        return '#FF9500';
+      default:
+        return '#8E8E93';
+    }
+  };
 
   const handleSubmit = async () => {
     const trimmedValue = inputValue.trim();
@@ -95,11 +176,16 @@ export const SearchScreen = () => {
           setAddToPalletNumber(codeEntity.pallet_number.toString());
         }
 
-        if ((result.from === SearchFrom.Code || result.from === 'code') && codeEntity.code) {
-          setCodeForDel([{
-            code: codeEntity.code,
-            boxNumber: codeEntity.box_number || 0,
-          }]);
+        if (
+          (result.from === SearchFrom.Code || result.from === 'code') &&
+          codeEntity.code
+        ) {
+          setCodeForDel([
+            {
+              code: codeEntity.code,
+              boxNumber: codeEntity.box_number || 0,
+            },
+          ]);
         }
       } else {
         setBoxNumber(undefined);
@@ -116,16 +202,20 @@ export const SearchScreen = () => {
         text1Style: { fontSize: 16, fontWeight: 'bold' },
         text2Style: { fontSize: 14, lineHeight: 18 },
       });
-
     } catch (error) {
       console.log('Ошибка поиска:', error);
 
-      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Неизвестная ошибка';
 
-      if (errorMessage.includes('таблица') && errorMessage.includes('не существует')) {
+      if (
+        errorMessage.includes('таблица') &&
+        errorMessage.includes('не существует')
+      ) {
         const formatted: FormattedResponse = {
           title: 'ℹ️ Информация',
-          message: 'Фасовка не начата. Обратитесь к оператору для начала фасовки.',
+          message:
+            'Фасовка не начата. Обратитесь к оператору для начала фасовки.',
           type: 'info',
           showActionButton: false,
         };
@@ -155,7 +245,6 @@ export const SearchScreen = () => {
       setPalletNumber(undefined);
       setCodeForDel([]);
       setLastSearchResult(null);
-
     } finally {
       setIsLoading(false);
       setTimeout(() => {
@@ -180,7 +269,9 @@ export const SearchScreen = () => {
       return;
     }
 
-    const targetPallet = palletNumber || (addToPalletNumber ? parseInt(addToPalletNumber, 10) : null);
+    const targetPallet =
+      palletNumber ||
+      (addToPalletNumber ? parseInt(addToPalletNumber, 10) : null);
 
     setIsAddingCode(true);
     try {
@@ -291,14 +382,18 @@ export const SearchScreen = () => {
   };
 
   const handlePrintPallet = async () => {
-    const currentPalletNumber = palletNumber || (addToPalletNumber ? parseInt(addToPalletNumber, 10) : undefined);
+    const currentPalletNumber =
+      palletNumber ||
+      (addToPalletNumber ? parseInt(addToPalletNumber, 10) : undefined);
     if (!currentPalletNumber) {
       Alert.alert('Ошибка', 'Номер паллеты не найден');
       return;
     }
 
     try {
-      const productCountResult = await ApiService.getProductCountInPallet(currentPalletNumber);
+      const productCountResult = await ApiService.getProductCountInPallet(
+        currentPalletNumber,
+      );
       const allPallets = await ApiService.getAllPallets();
 
       let boxCount = 0;
@@ -370,7 +465,8 @@ export const SearchScreen = () => {
   const searchFrom = lastSearchResult?.from;
   const isCodeType = searchFrom === SearchFrom.Code || searchFrom === 'code';
   const isBoxType = searchFrom === SearchFrom.Box || searchFrom === 'box';
-  const isPalletType = searchFrom === SearchFrom.Pallet || searchFrom === 'pallet';
+  const isPalletType =
+    searchFrom === SearchFrom.Pallet || searchFrom === 'pallet';
 
   return (
     <KeyboardAvoidingView
@@ -380,6 +476,18 @@ export const SearchScreen = () => {
     >
       <View style={styles.screenHeader}>
         <Text style={styles.screenTitle}>Поиск</Text>
+        {/* Статус сервера */}
+        <TouchableOpacity
+          onPress={pingServer}
+          style={styles.serverStatusContainer}
+          disabled={serverStatus === 'checking'}
+        >
+          <Text
+            style={[styles.serverStatusText, { color: getServerStatusColor() }]}
+          >
+            {getServerStatusIcon()} {serverUrl}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -392,11 +500,14 @@ export const SearchScreen = () => {
             <TextInput
               key={scanKey}
               ref={inputRef}
-              style={[styles.searchInput, isLoading && styles.searchInputDisabled]}
+              style={[
+                styles.searchInput,
+                isLoading && styles.searchInputDisabled,
+              ]}
               onChangeText={setInputValue}
               value={inputValue}
               onSubmitEditing={handleSubmit}
-              placeholder={isLoading ? 'Поиск...' : 'Отсканируйте или введите код'}
+              placeholder={isLoading ? 'Поиск...' : 'Отсканируйте код'}
               placeholderTextColor="#999"
               autoCapitalize="characters"
               autoCorrect={false}
@@ -416,164 +527,24 @@ export const SearchScreen = () => {
 
           {/* Информация о результате */}
           {formattedResponse && (
-            <View style={[
-              styles.resultContainer,
-              formattedResponse.type === 'success' && styles.resultSuccess,
-              formattedResponse.type === 'error' && styles.resultError,
-              formattedResponse.type === 'info' && styles.resultInfo,
-            ]}>
+            <View
+              style={[
+                styles.resultContainer,
+                formattedResponse.type === 'success' && styles.resultSuccess,
+                formattedResponse.type === 'error' && styles.resultError,
+                formattedResponse.type === 'info' && styles.resultInfo,
+              ]}
+            >
               <Text style={styles.resultTitle}>{formattedResponse.title}</Text>
-              <Text style={styles.resultMessage}>{formattedResponse.message}</Text>
+              <Text style={styles.resultMessage}>
+                {formattedResponse.message}
+              </Text>
             </View>
           )}
 
           {/* Кнопки действий */}
           {formattedResponse?.searchData && (
             <>
-              {/* Действия с кодом */}
-              {isCodeType && (
-                <>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => {
-                      setShowCodeActions(!showCodeActions);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {showCodeActions ? 'Скрыть действия' : 'Действия с кодом'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {showCodeActions && (
-                    <View style={styles.codeActionsContainer}>
-                      {/* Дополнительное поле для сканирования нового кода */}
-                      <View style={styles.addCodeSection}>
-                        <Text style={styles.addCodeSectionTitle}>
-                          Добавить код в коробку
-                          {boxNumber ? ` №${boxNumber}` : ''}
-                          {palletNumber ? `, паллета №${palletNumber}` : ''}
-                        </Text>
-
-                        <View style={styles.addCodeInputContainer}>
-                          <TextInput
-                            ref={newCodeInputRef}
-                            style={styles.addCodeInput}
-                            value={newCodeInput}
-                            onChangeText={setNewCodeInput}
-                            placeholder="Отсканируйте новый код"
-                            placeholderTextColor="#999"
-                            autoCapitalize="characters"
-                            autoCorrect={false}
-                            returnKeyType="done"
-                            onSubmitEditing={handleAddNewCode}
-                            editable={!isAddingCode}
-                          />
-                          <TouchableOpacity
-                            style={[
-                              styles.addCodeButton,
-                              (!newCodeInput.trim() || isAddingCode) && styles.addCodeButtonDisabled,
-                            ]}
-                            onPress={handleAddNewCode}
-                            disabled={!newCodeInput.trim() || isAddingCode}
-                          >
-                            {isAddingCode ? (
-                              <ActivityIndicator size="small" color="white" />
-                            ) : (
-                              <Text style={styles.addCodeButtonText}>+</Text>
-                            )}
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      {/* Печать этикетки коробки */}
-                      {boxNumber && (
-                        <TouchableOpacity
-                          style={styles.secondaryButton}
-                          onPress={handlePrintBox}
-                        >
-                          <Text style={styles.actionButtonText}>
-                            Печать этикетки коробки
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Печать этикетки паллеты */}
-                      {palletNumber && (
-                        <TouchableOpacity
-                          style={styles.secondaryButton}
-                          onPress={handlePrintPallet}
-                        >
-                          <Text style={styles.actionButtonText}>
-                            Печать этикетки паллеты
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Удаление кода */}
-                      <TouchableOpacity
-                        style={styles.dangerButton}
-                        onPress={handleDeleteCode}
-                      >
-                        <Text style={styles.actionButtonText}>
-                          Удалить код
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </>
-              )}
-
-              {/* Действия с коробкой */}
-              {isBoxType && (
-                <>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={handleActionButtonPress}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {formattedResponse.actionButtonText || 'Действия с коробкой'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.printButton}
-                    onPress={handlePrintBoxPallet}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      Печать этикетки коробки
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {/* Действия с паллетой */}
-              {isPalletType && (
-                <>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={handleActionButtonPress}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {formattedResponse.actionButtonText || 'Действия с паллетой'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.printButton}
-                    onPress={handlePrintBoxPallet}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      Печать этикетки паллеты
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-
               {/* Кнопка очистки */}
               <TouchableOpacity
                 style={styles.clearButton}
@@ -625,6 +596,17 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: 'white',
+  },
+  serverStatusContainer: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+  },
+  serverStatusText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   scrollContent: {
     flexGrow: 1,

@@ -19,8 +19,6 @@ const App = () => {
     switch (currentScreen) {
       case Pages.Page1:
         return <SearchScreen />;
-      case Pages.Page2:
-        return <HandWorkScreen />;
       default:
         return <SearchScreen />;
     }
@@ -31,11 +29,6 @@ const App = () => {
       id: '1',
       title: 'Поиск',
       onPress: () => setCurrentScreen(Pages.Page1),
-    },
-    {
-      id: '2',
-      title: 'Ручная работа',
-      onPress: () => setCurrentScreen(Pages.Page2),
     },
   ];
 
