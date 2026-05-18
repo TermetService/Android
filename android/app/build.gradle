@@ -79,7 +79,7 @@ android {
 
     namespace "com.statuschecker"
     defaultConfig {
-        applicationId "com.statuschecker"
+        applicationId "com.statuschecker1"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
