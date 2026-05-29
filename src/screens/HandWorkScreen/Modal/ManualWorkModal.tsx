@@ -191,6 +191,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
   }, [requestQueue, isSubmitting]);
   const [canScan, setCanScan] = useState(true);
   const SCAN_DELAY = 100; // 100 мс задержка между сканами
+
   const handleSubmit = () => {
     const trimmedCode = code.trim();
     if (!trimmedCode) return;
@@ -364,7 +365,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
           <TextInput
             ref={inputRef}
             style={styles.manualWorkInput}
-            value={code}
+            value=""
             onChangeText={setCode}
             onSubmitEditing={handleSubmit}
             onKeyPress={handleKeyPress}
