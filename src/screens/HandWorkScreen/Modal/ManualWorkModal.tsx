@@ -86,7 +86,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
   // Звуковая индикация (для ТСД)
   const playBeep = (type: 'success' | 'error') => {
     // Здесь код для воспроизведения звукового сигнала ТСД
-    console.log(`🔊 ${type === 'success' ? '✓' : '✗'}`);
+    console.log(`${type === 'success' ? '✓' : '✗'}`);
   };
 
   useEffect(() => {

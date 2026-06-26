@@ -79,7 +79,7 @@ android {
 
     namespace "com.statuschecker"
     defaultConfig {
-        applicationId "com.statuschecker"
+        applicationId "com.statuschecker3"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -106,7 +106,7 @@ android {
             applicationVariants.all { variant ->
                 variant.outputs.all { output ->
                     // Создаем имя файла: RED_PISCHEVIK.apk
-                    def newName = "RED12131_PISCHEVIK_v${defaultConfig.versionName}.apk"
+                    def newName = "DIVISION_v${defaultConfig.versionName}.apk"
                     outputFileName = newName
                 }
             }
