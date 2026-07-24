@@ -13,7 +13,6 @@ import { ApiService } from '../../../services/api';
 import { CustomAlert } from '../../../components/CustomAlert';
 import { Config } from '../../../config';
 
-// Компонент модального окна ручной работы
 interface ManualWorkModalProps {
   visible: boolean;
   onClose: () => void;
@@ -26,12 +25,26 @@ interface BoxInfo {
   limitProductsInBox: number;
 }
 
+type ScanStage = 'barcode' | 'qr';
+type LastSaved = 'barcode' | 'qr' | null;
+
+interface QueueItem {
+  code: string;
+  stage: ScanStage;
+}
+
 export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
   visible,
   onClose,
 }) => {
-  const [code, setCode] = useState('');
+  const [barcodeValue, setBarcodeValue] = useState('');
+  const [qrValue, setQrValue] = useState('');
+  const [stage, setStage] = useState<ScanStage>('barcode');
+  const [lastSaved, setLastSaved] = useState<LastSaved>(null);
   const [boxInfo, setBoxInfo] = useState<BoxInfo | null>(null);
+  const [productAddedBanner, setProductAddedBanner] = useState<string | null>(
+    null,
+  );
   const [showCustomAlert, setShowCustomAlert] = useState(false);
   const [alertConfig, setAlertConfig] = useState({
     title: '',
@@ -42,15 +55,20 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
     'checking' | 'online' | 'offline'
   >('checking');
 
-  // Очередь с ограничением
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [requestQueue, setRequestQueue] = useState<string[]>([]);
-  const MAX_QUEUE_SIZE = 10; // Максимальный размер очереди
+  const [requestQueue, setRequestQueue] = useState<QueueItem[]>([]);
+  const [isClosingBox, setIsClosingBox] = useState(false);
+  const [isClosingPallet, setIsClosingPallet] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const MAX_QUEUE_SIZE = 10;
 
-  // const title = Config.USER_ID;
   const serverUrl = Config.SERVER_URL;
 
-  const inputRef = useRef<TextInput>(null);
+  const barcodeInputRef = useRef<TextInput>(null);
+  const qrInputRef = useRef<TextInput>(null);
+  const productBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const pingServer = async () => {
     try {
@@ -62,9 +80,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
 
       const response = await fetch(`${serverUrl}/code/ping`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
       });
 
@@ -83,28 +99,22 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
     }
   };
 
-  // Звуковая индикация (для ТСД)
   const playBeep = (type: 'success' | 'error') => {
-    // Здесь код для воспроизведения звукового сигнала ТСД
     console.log(`${type === 'success' ? '✓' : '✗'}`);
   };
 
   useEffect(() => {
     if (visible) {
       pingServer();
-
       const intervalId = setInterval(pingServer, 30000);
-
-      return () => {
-        clearInterval(intervalId);
-      };
+      return () => clearInterval(intervalId);
     }
   }, [visible]);
 
   useEffect(() => {
     if (visible) {
       const timer = setTimeout(() => {
-        inputRef.current?.focus();
+        barcodeInputRef.current?.focus();
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -113,55 +123,145 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
   useEffect(() => {
     if (!visible) {
       setBoxInfo(null);
-      setCode('');
+      setBarcodeValue('');
+      setQrValue('');
+      setStage('barcode');
+      setLastSaved(null);
+      setProductAddedBanner(null);
       setServerStatus('checking');
-      setRequestQueue([]); // Очищаем очередь при закрытии
+      setRequestQueue([]);
+      if (productBannerTimerRef.current) {
+        clearTimeout(productBannerTimerRef.current);
+        productBannerTimerRef.current = null;
+      }
     }
   }, [visible]);
 
-  // Обработка очереди
+  useEffect(() => {
+    return () => {
+      if (productBannerTimerRef.current) {
+        clearTimeout(productBannerTimerRef.current);
+      }
+    };
+  }, []);
+
+  const showProductAddedBanner = (text: string) => {
+    setProductAddedBanner(text);
+    if (productBannerTimerRef.current) {
+      clearTimeout(productBannerTimerRef.current);
+    }
+    productBannerTimerRef.current = setTimeout(() => {
+      setProductAddedBanner(null);
+      productBannerTimerRef.current = null;
+    }, 3000);
+  };
+
   useEffect(() => {
     const processQueue = async () => {
       if (requestQueue.length > 0 && !isSubmitting) {
         setIsSubmitting(true);
-        const currentCode = requestQueue[0];
+        const current = requestQueue[0];
 
         try {
-          const result = await ApiService.handSave(currentCode);
+          // ВАЖНО: Очищаем буфер перед каждым bar-кодом
+          if (current.stage === 'barcode') {
+            console.log(
+              'Очистка буфера перед обработкой bar-кода:',
+              current.code,
+            );
+            await ApiService.clearBuffer();
+          }
 
-          // Убираем обработанный запрос
+          const result = await ApiService.handSave(current.code);
+
+          console.log('resultresultresultresultresultresultresult', result);
+
           setRequestQueue(prev => prev.slice(1));
-
-          // Звуковой сигнал
           playBeep(result.success ? 'success' : 'error');
 
-          // Показываем алерт только для ошибок
+          const save = result.data?.result?.save;
+
           if (!result.success) {
+            setLastSaved(null);
             setAlertConfig({
               title: '⚠️ Ошибка',
               message: result.message,
               type: 'error',
             });
-            setShowCustomAlert(true);
-          }
 
-          // Обновляем информацию о коробке из ответа
-          if (result.success && result.data?.result) {
-            setBoxInfo({
-              boxNumber: result.data.result.boxNumber,
-              palletNumber: result.data.result.palletNumber,
-              productsInBox: result.data.result.productsInBox,
-              limitProductsInBox:
-                parseInt(result.data.result.limitProductsInBox) || 2,
+            setBarcodeValue('');
+            setQrValue('');
+            // Очищаем буфер после ошибки
+            await ApiService.clearBuffer();
+            setShowCustomAlert(true);
+          } else if (save === 'BAR') {
+            // штрихкод принят, бэк ждёт QR с массой
+            setLastSaved('barcode');
+            setStage('qr');
+            setAlertConfig({
+              title: '✓ Штрихкод сохранён',
+              message: 'Теперь отсканируйте QR-код с массой',
+              type: 'success',
             });
+            setShowCustomAlert(true);
+          } else if (save === 'BARanqQR') {
+            // пара сохранена полностью — продукт добавлен в коробку
+            setLastSaved('qr');
+            setStage('barcode');
+
+            setBarcodeValue('');
+            setQrValue('');
+
+            let newBoxNumber = boxInfo?.boxNumber;
+            let newProductsInBox = boxInfo?.productsInBox;
+
+            if (result.data?.result?.boxNumber) {
+              newBoxNumber = result.data.result.boxNumber;
+              newProductsInBox = result.data.result.productsInBox;
+              setBoxInfo({
+                boxNumber: result.data.result.boxNumber,
+                palletNumber: result.data.result.palletNumber,
+                productsInBox: result.data.result.productsInBox,
+                limitProductsInBox:
+                  parseInt(result.data.result.limitProductsInBox) || 2,
+              });
+            }
+
+            showProductAddedBanner(
+              newBoxNumber
+                ? `✓ Продукт добавлен в коробку №${newBoxNumber} (${newProductsInBox})`
+                : '✓ Продукт успешно добавлен',
+            );
+
+            setAlertConfig({
+              title: '✓ Код сохранён',
+              message:
+                'Вы можете перейти в отгрузку и увидеть текущий вес коробки',
+              type: 'success',
+            });
+
+            // Очищаем буфер после успешного сохранения пары
+            await ApiService.clearBuffer();
+
+            setShowCustomAlert(true);
+          } else if (save === 'QR') {
+            setStage('barcode');
+            setLastSaved(null);
+
+            setQrValue('');
+            // Очищаем буфер, если QR пришел без пары
+            await ApiService.clearBuffer();
           }
         } catch (error) {
           playBeep('error');
+          setLastSaved(null);
           setAlertConfig({
             title: '❌ Ошибка',
             message: 'Ошибка соединения с сервером',
             type: 'error',
           });
+          // Очищаем буфер при ошибке соединения
+          await ApiService.clearBuffer();
           setShowCustomAlert(true);
         } finally {
           setIsSubmitting(false);
@@ -171,11 +271,23 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
 
     processQueue();
   }, [requestQueue, isSubmitting]);
+
+  useEffect(() => {
+    if (stage === 'qr') {
+      const timer = setTimeout(() => qrInputRef.current?.focus(), 150);
+      return () => clearTimeout(timer);
+    } else {
+      const timer = setTimeout(() => barcodeInputRef.current?.focus(), 150);
+      return () => clearTimeout(timer);
+    }
+  }, [stage]);
+
   const [canScan, setCanScan] = useState(true);
-  const SCAN_DELAY = 100; // 100 мс задержка между сканами
-  const handleSubmit = () => {
-    const trimmedCode = code.trim();
-    if (!trimmedCode) return;
+  const SCAN_DELAY = 100;
+
+  const submitStage = (rawValue: string, expectedStage: ScanStage) => {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return;
 
     if (!canScan) {
       playBeep('error');
@@ -185,12 +297,9 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
         type: 'error',
       });
       setShowCustomAlert(true);
-      setCode('');
-      inputRef.current?.focus();
       return;
     }
 
-    // Проверка размера очереди
     if (requestQueue.length >= MAX_QUEUE_SIZE) {
       playBeep('error');
       setAlertConfig({
@@ -199,44 +308,76 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
         type: 'error',
       });
       setShowCustomAlert(true);
-      setCode('');
-      inputRef.current?.focus();
       return;
     }
 
-    // Добавляем в очередь
-    setRequestQueue(prev => [...prev, trimmedCode]);
+    // Для bar-кодов сразу очищаем буфер перед добавлением в очередь
+    if (expectedStage === 'barcode') {
+      ApiService.clearBuffer().catch(err =>
+        console.log('Ошибка при очистке буфера:', err),
+      );
+    }
+
+    setRequestQueue(prev => [...prev, { code: trimmed, stage: expectedStage }]);
     setCanScan(false);
-    // Очищаем поле для следующего скана
-    setCode('');
-    inputRef.current?.focus();
-    setTimeout(() => {
-      setCanScan(true);
-      inputRef.current?.focus();
-    }, SCAN_DELAY);
-    // Короткий сигнал подтверждения сканирования
+
+    if (expectedStage === 'barcode') {
+      setBarcodeValue('');
+    } else {
+      setQrValue('');
+    }
+
+    setTimeout(() => setCanScan(true), SCAN_DELAY);
     playBeep('success');
   };
 
-  // Обработка нажатия Enter
-  const handleKeyPress = (event: any) => {
-    if (event.nativeEvent.key === 'Enter') {
-      handleSubmit();
+  const handleBarcodeSubmit = () => submitStage(barcodeValue, 'barcode');
+  const handleQrSubmit = () => submitStage(qrValue, 'qr');
+
+  const handleBarcodeKeyPress = (event: any) => {
+    if (event.nativeEvent.key === 'Enter') handleBarcodeSubmit();
+  };
+  const handleQrKeyPress = (event: any) => {
+    if (event.nativeEvent.key === 'Enter') handleQrSubmit();
+  };
+
+  const handleResetBuffer = async () => {
+    setIsResetting(true);
+    try {
+      const result = await ApiService.clearBuffer();
+      setStage('barcode');
+      setLastSaved(null);
+      setBarcodeValue('');
+      setQrValue('');
+      setRequestQueue([]);
+      setAlertConfig({
+        title: result.success === false ? '⚠️ Ошибка' : '✓ Сброшено',
+        message:
+          result.success === false
+            ? result.message || 'Не удалось сбросить буфер'
+            : 'Буфер очищен, начните сканирование заново',
+        type: result.success === false ? 'error' : 'success',
+      });
+      setShowCustomAlert(true);
+    } catch (error) {
+      setAlertConfig({
+        title: '❌ Ошибка',
+        message: 'Не удалось сбросить буфер',
+        type: 'error',
+      });
+      setShowCustomAlert(true);
+    } finally {
+      setIsResetting(false);
     }
   };
 
-  // Обработчик закрытия кастомного алерта
-  const handleAlertClose = () => {
-    setShowCustomAlert(false);
-  };
+  const handleAlertClose = () => setShowCustomAlert(false);
 
-  // Вычисление процента заполнения коробки
   const getFillPercentage = (): number => {
     if (!boxInfo) return 0;
     return (boxInfo.productsInBox / boxInfo.limitProductsInBox) * 100;
   };
 
-  // Получение цвета и иконки для статуса сервера
   const getServerStatusIcon = () => {
     switch (serverStatus) {
       case 'online':
@@ -250,7 +391,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
     }
   };
 
-  // Отображение статуса очереди (используем существующие стили)
   const renderQueueStatus = () => {
     if (requestQueue.length > 0) {
       return (
@@ -275,12 +415,8 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalContainer}
       >
-        {/* Информация об операторе и сервере */}
         <View style={styles.modalHeader}>
           <View style={styles.infoContainer}>
-            {/* <Text style={styles.modalOperatorTitle}>
-                            Оператор №{title}
-                        </Text> */}
             <TouchableOpacity
               onPress={pingServer}
               style={styles.serverInfoButton}
@@ -299,7 +435,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
           </View>
         </View>
 
-        {/* Заголовок модального окна */}
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Режим ручной работы</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -307,10 +442,17 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Статус очереди */}
         {renderQueueStatus()}
 
-        {/* Информация о коробке (вверху экрана) */}
+        {/* Баннер подтверждения добавления продукта в коробку */}
+        {productAddedBanner && (
+          <View style={styles.productAddedBanner}>
+            <Text style={styles.productAddedBannerText}>
+              {productAddedBanner}
+            </Text>
+          </View>
+        )}
+
         {boxInfo && (
           <View style={styles.boxInfoContainer}>
             <View style={styles.boxIconWrapper}>
@@ -341,38 +483,118 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
           </View>
         )}
 
-        {/* Поле ввода по центру оставшейся части экрана */}
+        {/* Индикатор стадии сканирования с отметкой что сохранено */}
+        <View style={styles.stageBadgeContainer}>
+          <View
+            style={[
+              styles.stageBadge,
+              stage === 'barcode'
+                ? styles.stageBadgeActive
+                : styles.stageBadgeDone,
+            ]}
+          >
+            <Text
+              style={[
+                styles.stageBadgeText,
+                stage === 'barcode' && styles.stageBadgeTextActive,
+              ]}
+            >
+              {stage !== 'barcode' ? '✓ ' : ''}1. Код товара
+            </Text>
+          </View>
+          <View style={styles.stageBadgeArrow}>
+            <Text style={styles.stageBadgeArrowText}>→</Text>
+          </View>
+          <View
+            style={[
+              styles.stageBadge,
+              stage === 'qr'
+                ? styles.stageBadgeActive
+                : styles.stageBadgePending,
+            ]}
+          >
+            <Text
+              style={[
+                styles.stageBadgeText,
+                stage === 'qr' && styles.stageBadgeTextActive,
+              ]}
+            >
+              2. Код массы (QR)
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.stageHint}>
+          {stage === 'barcode'
+            ? 'Ожидается: штрихкод товара'
+            : 'Ожидается: QR-код с массой'}
+        </Text>
+
         <View style={styles.inputWrapper}>
+          <Text style={styles.fieldLabel}>Код товара</Text>
           <TextInput
-            ref={inputRef}
-            style={styles.manualWorkInput}
-            value={code}
-            onChangeText={setCode}
-            onSubmitEditing={handleSubmit}
-            onKeyPress={handleKeyPress}
-            placeholder={
-              requestQueue.length > 0
-                ? `Очередь: ${requestQueue.length} | Введите код...`
-                : 'Введите код'
-            }
+            ref={barcodeInputRef}
+            style={[
+              styles.manualWorkInput,
+              stage !== 'barcode' && styles.manualWorkInputDisabled,
+            ]}
+            value={barcodeValue}
+            onChangeText={setBarcodeValue}
+            onSubmitEditing={handleBarcodeSubmit}
+            onKeyPress={handleBarcodeKeyPress}
+            placeholder="Отсканируйте штрихкод"
             placeholderTextColor="#999"
             autoCapitalize="characters"
             autoCorrect={false}
-            autoFocus={true}
             returnKeyType="done"
             blurOnSubmit={false}
-            editable={requestQueue.length < MAX_QUEUE_SIZE}
+            editable={
+              stage === 'barcode' && requestQueue.length < MAX_QUEUE_SIZE
+            }
           />
+
+          <Text style={[styles.fieldLabel, { marginTop: 16 }]}>
+            Код массы (QR)
+          </Text>
+          <TextInput
+            ref={qrInputRef}
+            style={[
+              styles.manualWorkInput,
+              stage !== 'qr' && styles.manualWorkInputDisabled,
+            ]}
+            value={qrValue}
+            onChangeText={setQrValue}
+            onSubmitEditing={handleQrSubmit}
+            onKeyPress={handleQrKeyPress}
+            placeholder="Отсканируйте QR с массой"
+            placeholderTextColor="#999"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            returnKeyType="done"
+            blurOnSubmit={false}
+            editable={stage === 'qr' && requestQueue.length < MAX_QUEUE_SIZE}
+          />
+
+          {stage === 'qr' && (
+            <TouchableOpacity
+              style={styles.resetButton}
+              onPress={handleResetBuffer}
+              disabled={isResetting}
+            >
+              <Text style={styles.resetButtonText}>
+                {isResetting ? 'Сброс...' : '↺ Сбросить и начать заново'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Кастомный алерт */}
         <CustomAlert
           visible={showCustomAlert}
           title={alertConfig.title}
           message={alertConfig.message}
           type={alertConfig.type}
           onClose={handleAlertClose}
-          autoCloseTime={alertConfig.type === 'success' ? 100 : undefined}
+          autoCloseTime={alertConfig.type === 'success' ? 2000 : undefined}
         />
       </KeyboardAvoidingView>
     </Modal>

@@ -12,7 +12,7 @@ import { styles } from './styles';
 import { ManualWorkModal } from './Modal/ManualWorkModal';
 
 export const HandWorkScreen = () => {
-  const [showManualModal, setShowManualModal] = useState(false);
+  const [showManualModal, setShowManualModal] = useState(true);
 
   const startHandWork = async () => {
     setShowManualModal(true);

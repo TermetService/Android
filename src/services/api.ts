@@ -181,10 +181,48 @@ export class ApiService {
         },
         body: JSON.stringify({ boxNumber, countInBox }),
       });
-      return response;
+
+      console.log('PrintBox response status:', response.status);
+
+      // Получаем текст ответа
+      const responseText = await response.text();
+      console.log('PrintBox response text:', responseText);
+
+      // Парсим ответ
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        throw new Error('Некорректный ответ от сервера');
+      }
+
+      // Проверяем статус ответа
+      if (!response.ok) {
+        // Если сервер вернул ошибку с сообщением
+        if (data && data.message) {
+          throw new Error(data.message);
+        }
+        throw new Error(`Ошибка HTTP: ${response.status}`);
+      }
+
+      // Проверяем success в ответе
+      if (data.success === false) {
+        throw new Error(data.message || 'Ошибка печати коробки');
+      }
+
+      return {
+        success: true,
+        message: data.message || 'Этикетка коробки напечатана',
+        data: data.data
+      };
     } catch (error) {
       console.error('Ошибка печати коробки:', error);
-      throw error;
+      // Возвращаем объект с ошибкой, а не выбрасываем её
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка при печати коробки'
+      };
     }
   }
 
@@ -207,12 +245,47 @@ export class ApiService {
             countInPallet,
             productCountInPallet,
           }),
-        },
+        }
       );
-      return response;
+
+      console.log('PrintPallet response status:', response.status);
+
+      // Получаем текст ответа
+      const responseText = await response.text();
+      console.log('PrintPallet response text:', responseText);
+
+      // Парсим ответ
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        throw new Error('Некорректный ответ от сервера');
+      }
+
+      // Проверяем статус ответа
+      if (!response.ok) {
+        if (data && data.message) {
+          throw new Error(data.message);
+        }
+        throw new Error(`Ошибка HTTP: ${response.status}`);
+      }
+
+      if (data.success === false) {
+        throw new Error(data.message || 'Ошибка печати паллеты');
+      }
+
+      return {
+        success: true,
+        message: data.message || 'Этикетка паллеты напечатана',
+        data: data.data
+      };
     } catch (error) {
       console.error('Ошибка печати паллеты:', error);
-      throw error;
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка при печати паллеты'
+      };
     }
   }
 
@@ -565,6 +638,198 @@ export class ApiService {
         success: false,
         message: error instanceof Error ? error.message : 'Неизвестная ошибка',
       };
+    }
+  }
+
+  // добавить в ApiService
+
+  static async clearBuffer() {
+    try {
+      const response = await fetch(`${Config.SERVER_URL}/code/clearBuffer`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const responseText = await response.text();
+
+      if (this.isTableNotExistsError(responseText)) {
+        return { success: false, message: 'Фасовка не начата' };
+      }
+
+      if (!response.ok) {
+        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
+      }
+
+      return responseText && responseText.trim() !== ''
+        ? JSON.parse(responseText)
+        : { success: true, message: 'Буфер очищен' };
+    } catch (error) {
+      console.error('Ошибка сброса буфера:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      };
+    }
+  }
+
+  static async closeBoxAndPrint() {
+    try {
+      const response = await fetch(
+        `${Config.SERVER_URL}/code/closeAndPrintBoxLabel`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      const responseText = await response.text();
+      console.log('Ответ закрытия коробки:', responseText);
+
+      if (this.isTableNotExistsError(responseText)) {
+        return { success: false, message: 'Фасовка не начата' };
+      }
+
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Сервер вернул пустой ответ');
+      }
+
+      const responseData = JSON.parse(responseText);
+
+      if (!response.ok) {
+        // HttpException от Nest приходит как { status, error, details } или { message }
+        const message =
+          responseData?.error ||
+          responseData?.message ||
+          'Ошибка при закрытии коробки';
+        return { success: false, message };
+      }
+
+      return {
+        success: responseData.success !== false,
+        message: responseData.message || 'Коробка закрыта',
+        data: responseData.data,
+      };
+    } catch (error) {
+      console.error('Ошибка закрытия коробки:', error);
+      return {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Ошибка при закрытии коробки',
+      };
+    }
+  }
+
+  static async closePalletAndPrint() {
+    try {
+      const response = await fetch(
+        `${Config.SERVER_URL}/code/closeCurrentPalletAndPrint`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      const responseText = await response.text();
+      console.log('Ответ закрытия паллеты:', responseText);
+
+      if (this.isTableNotExistsError(responseText)) {
+        return { success: false, message: 'Фасовка не начата' };
+      }
+
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Сервер вернул пустой ответ');
+      }
+
+      const responseData = JSON.parse(responseText);
+
+      if (!response.ok) {
+        const message =
+          responseData?.error ||
+          responseData?.message ||
+          'Ошибка при закрытии паллеты';
+        return { success: false, message };
+      }
+
+      return {
+        success: responseData.success !== false,
+        message: responseData.message || 'Паллета закрыта',
+        data: responseData.data,
+      };
+    } catch (error) {
+      console.error('Ошибка закрытия паллеты:', error);
+      return {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Ошибка при закрытии паллеты',
+      };
+    }
+  }
+
+  static async getWeightOfCurrentBox() {
+    try {
+      const response = await fetch(
+        `${Config.SERVER_URL}/code/getWeightOfCurrentBox`,
+      );
+      const responseText = await response.text();
+
+      if (this.isTableNotExistsError(responseText)) {
+        return { success: false, weight: 0 };
+      }
+
+      const responseData = responseText ? JSON.parse(responseText) : null;
+
+      if (!response.ok) {
+        return { success: false, weight: 0, message: responseData?.error };
+      }
+
+      return {
+        success: true,
+        weight: responseData?.data?.weight ?? 0,
+      };
+    } catch (error) {
+      console.error('Ошибка получения веса коробки:', error);
+      return { success: false, weight: 0 };
+    }
+  }
+
+  static async getWeightOfCurrentPallet() {
+    try {
+      const response = await fetch(
+        `${Config.SERVER_URL}/code/getWeightOfCurrentPallet`,
+      );
+
+      const responseText = await response.text();
+
+      if (this.isTableNotExistsError(responseText)) {
+        return { success: false, weight: 0 };
+      }
+
+      const responseData = responseText ? JSON.parse(responseText) : null;
+
+      if (!response.ok) {
+        return { success: false, weight: 0, message: responseData?.error };
+      }
+
+      return {
+        success: true,
+        weight: responseData?.data?.weight ?? 0,
+      };
+    } catch (error) {
+      console.error('Ошибка получения веса паллеты:', error);
+      return { success: false, weight: 0 };
     }
   }
 }

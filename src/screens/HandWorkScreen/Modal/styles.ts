@@ -20,7 +20,7 @@ export const styles = StyleSheet.create({
   modalOperatorTitle: {
     fontSize: 18,
     color: '#000000',
-    marginLeft: 50
+    marginLeft: 50,
   },
   infoContainer: {
     flex: 1,
@@ -132,7 +132,6 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginTop: -50, // Немного смещаем вверх для лучшего центрирования
   },
   manualWorkInput: {
     width: '100%',
@@ -147,5 +146,120 @@ export const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     letterSpacing: 1, // Уменьшил межбуквенный интервал
+  },
+  stageBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginTop: 16,
+  },
+  stageBadge: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+  },
+  stageBadgeActive: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  stageBadgePending: {
+    backgroundColor: '#fff',
+    borderColor: '#ddd',
+  },
+  stageBadgeDone: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#A5D6A7',
+  },
+  stageBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  stageBadgeTextActive: {
+    color: '#fff',
+  },
+  stageBadgeArrow: {
+    paddingHorizontal: 8,
+  },
+  stageBadgeArrowText: {
+    fontSize: 18,
+    color: '#999',
+  },
+  stageHint: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#888',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 6,
+    fontWeight: '500',
+    alignSelf: 'flex-start',
+  },
+  manualWorkInputDisabled: {
+    backgroundColor: '#f0f0f0',
+    borderColor: '#e0e0e0',
+    color: '#aaa',
+  },
+  resetButton: {
+    marginTop: 16,
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  resetButtonText: {
+    color: '#F44336',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  closeButtonsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+    gap: 12,
+  },
+  closeActionButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBoxButton: {
+    backgroundColor: '#2196F3',
+  },
+  closePalletButton: {
+    backgroundColor: '#FF9800',
+  },
+  closeActionButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  productAddedBanner: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#4CAF50',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  productAddedBannerText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
   },
 });
