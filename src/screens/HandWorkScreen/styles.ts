@@ -1,14 +1,14 @@
 // src/screens/styles.ts
 import { StyleSheet, Platform, Dimensions } from 'react-native';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  
+
   // Заголовок экрана
   screenHeader: {
     width: '100%',
@@ -25,17 +25,17 @@ export const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  
+
   screenTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#333333',
   },
-  
+
   scrollContent: {
     flexGrow: 1,
   },
-  
+
   centerContainer: {
     flex: 1,
     alignItems: 'center',
@@ -43,7 +43,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 40,
     minHeight: height * 0.7,
   },
-  
+
   // Кнопка "Начать ручную работу"
   startButton: {
     backgroundColor: '#007AFF',
@@ -59,20 +59,20 @@ export const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  
+
   startButtonText: {
     color: 'white',
     fontSize: 20,
     fontWeight: '700',
     textAlign: 'center',
   },
-  
+
   // Стили для модального окна ручной работы
   modalContainer: {
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  
+
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -89,13 +89,13 @@ export const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  
+
   modalTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#333333',
   },
-  
+
   closeButton: {
     width: 40,
     height: 40,
@@ -104,20 +104,20 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   closeButtonText: {
     fontSize: 20,
     color: '#666',
     fontWeight: '300',
   },
-  
+
   modalContent: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
-  
+
   // Поле ввода для ручной работы
   manualWorkInput: {
     width: '100%',
@@ -138,7 +138,7 @@ export const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  
+
   inputHint: {
     fontSize: 14,
     color: '#666',
@@ -146,13 +146,13 @@ export const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
-  
+
   // Старые стили (оставляем для SearchScreen)
   content: {
     flex: 1,
     paddingTop: 40,
   },
-  
+
   searchInput: {
     width: '100%',
     height: 60,
@@ -171,18 +171,18 @@ export const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  
+
   searchInputDisabled: {
     backgroundColor: '#f0f0f0',
     borderColor: '#ddd',
     color: '#999',
   },
-  
+
   actionButtonContainer: {
     alignItems: 'center',
     paddingHorizontal: 40,
   },
-  
+
   actionButton: {
     backgroundColor: '#007AFF',
     borderRadius: 12,
@@ -197,10 +197,37 @@ export const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  
+
+  // Добавьте эти стили в существующий объект styles
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 12,
+  },
+
+  closeBoxButton: {
+    backgroundColor: '#FF9800',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+
+  closePalletButton: {
+    backgroundColor: '#F44336',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+
   actionButtonText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });

@@ -371,6 +371,56 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
     }
   };
 
+  const handleCloseBox = async () => {
+    setIsClosingBox(true);
+    try {
+      const result = await ApiService.closeBoxAndPrint();
+      setAlertConfig({
+        title: result.success ? '✓ Коробка закрыта' : '⚠️ Ошибка',
+        message: result.message,
+        type: result.success ? 'success' : 'error',
+      });
+      if (result.success) {
+        setBoxInfo(null);
+      }
+      setShowCustomAlert(true);
+    } catch (error) {
+      setAlertConfig({
+        title: '❌ Ошибка',
+        message: 'Не удалось закрыть коробку',
+        type: 'error',
+      });
+      setShowCustomAlert(true);
+    } finally {
+      setIsClosingBox(false);
+    }
+  };
+
+  const handleClosePallet = async () => {
+    setIsClosingPallet(true);
+    try {
+      const result = await ApiService.closePalletAndPrint();
+      setAlertConfig({
+        title: result.success ? '✓ Паллета закрыта' : '⚠️ Ошибка',
+        message: result.message,
+        type: result.success ? 'success' : 'error',
+      });
+      if (result.success) {
+        setBoxInfo(null);
+      }
+      setShowCustomAlert(true);
+    } catch (error) {
+      setAlertConfig({
+        title: '❌ Ошибка',
+        message: 'Не удалось закрыть паллету',
+        type: 'error',
+      });
+      setShowCustomAlert(true);
+    } finally {
+      setIsClosingPallet(false);
+    }
+  };
+
   const handleAlertClose = () => setShowCustomAlert(false);
 
   const getFillPercentage = (): number => {
@@ -403,6 +453,8 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
     }
     return null;
   };
+
+  const closeActionsDisabled = isSubmitting || requestQueue.length > 0;
 
   return (
     <Modal
@@ -586,6 +638,23 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
               </Text>
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Кнопки закрытия коробки и паллеты */}
+        <View style={styles.closeButtonsRow}>
+          <TouchableOpacity
+            style={[
+              styles.closeActionButton,
+              styles.closeBoxButton,
+              (isClosingBox || closeActionsDisabled) && { opacity: 0.5 },
+            ]}
+            onPress={handleCloseBox}
+            disabled={isClosingBox || closeActionsDisabled}
+          >
+            <Text style={styles.closeActionButtonText}>
+              {isClosingBox ? 'Закрытие...' : 'Закрыть коробку'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <CustomAlert

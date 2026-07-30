@@ -37,12 +37,10 @@ export const SearchScreen = () => {
   const [addToBoxNumber, setAddToBoxNumber] = useState('');
   const [addToPalletNumber, setAddToPalletNumber] = useState('');
 
-  // Состояния для дополнительного поля сканирования нового кода
   const [newCodeInput, setNewCodeInput] = useState('');
   const newCodeInputRef = useRef<TextInput>(null);
   const [isAddingCode, setIsAddingCode] = useState(false);
 
-  // Новые состояния для режима сканирования QR/Barcode
   const [scanMode, setScanMode] = useState<'single' | 'dual'>('single');
   const [barcodeValue, setBarcodeValue] = useState('');
   const [qrValue, setQrValue] = useState('');
@@ -78,7 +76,6 @@ export const SearchScreen = () => {
     return () => clearTimeout(timer);
   }, [scanKey]);
 
-  // Фокусировка на нужном поле при смене стадии
   useEffect(() => {
     if (scanMode === 'dual') {
       if (scanStage === 'barcode') {
@@ -199,7 +196,6 @@ export const SearchScreen = () => {
     }
   };
 
-  // Добавление нового кода в текущую коробку (режим single)
   const handleAddNewCode = async () => {
     const newCode = newCodeInput.trim();
     if (!newCode) {
@@ -276,7 +272,6 @@ export const SearchScreen = () => {
     }
   };
 
-  // Обработка сканирования barcode в dual-режиме
   const handleBarcodeSubmit = async () => {
     const code = barcodeValue.trim();
     if (!code) return;
@@ -327,7 +322,6 @@ export const SearchScreen = () => {
     }
   };
 
-  // Обработка сканирования QR в dual-режиме
   const handleQrSubmit = async () => {
     const code = qrValue.trim();
     if (!code) {
@@ -347,7 +341,6 @@ export const SearchScreen = () => {
 
     setIsAddingCode(true);
     try {
-      // отправляем ТОЛЬКО QR отдельным запросом — бэк сам соберёт пару из буфера isQRBARcod
       const result = await ApiService.addCodeToBox(
         code,
         targetBox,
@@ -402,7 +395,6 @@ export const SearchScreen = () => {
     }
   };
 
-  // Сброс dual-режима
   const handleResetDualScan = () => {
     setBarcodeValue('');
     setQrValue('');
@@ -440,7 +432,6 @@ export const SearchScreen = () => {
     }, 500);
   };
 
-  // Функция печати коробки
   const handlePrintBox = async () => {
     const currentBoxNumber = boxNumber || parseInt(addToBoxNumber, 10);
     if (!currentBoxNumber) {
@@ -488,7 +479,6 @@ export const SearchScreen = () => {
     }
   };
 
-  // Функция печати паллеты
   const handlePrintPallet = async () => {
     const currentPalletNumber =
       palletNumber ||
@@ -622,7 +612,6 @@ export const SearchScreen = () => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
-          {/* Основное поле ввода для поиска */}
           <View style={styles.centerContainer}>
             <TextInput
               key={scanKey}
@@ -654,7 +643,6 @@ export const SearchScreen = () => {
             )}
           </View>
 
-          {/* Информация о результате */}
           {formattedResponse && (
             <View
               style={[
@@ -671,10 +659,8 @@ export const SearchScreen = () => {
             </View>
           )}
 
-          {/* Кнопки действий */}
           {formattedResponse?.searchData && (
             <>
-              {/* Действия с кодом */}
               {isCodeType && (
                 <>
                   <TouchableOpacity
@@ -691,26 +677,7 @@ export const SearchScreen = () => {
 
                   {showCodeActions && (
                     <View style={styles.codeActionsContainer}>
-                      {/* Выбор режима сканирования */}
                       <View style={styles.scanModeSelector}>
-                        <TouchableOpacity
-                          style={[
-                            styles.scanModeButton,
-                            scanMode === 'single' &&
-                              styles.scanModeButtonActive,
-                          ]}
-                          onPress={() => setScanMode('single')}
-                        >
-                          <Text
-                            style={[
-                              styles.scanModeButtonText,
-                              scanMode === 'single' &&
-                                styles.scanModeButtonTextActive,
-                            ]}
-                          >
-                            Один код
-                          </Text>
-                        </TouchableOpacity>
                         <TouchableOpacity
                           style={[
                             styles.scanModeButton,
@@ -730,7 +697,6 @@ export const SearchScreen = () => {
                         </TouchableOpacity>
                       </View>
 
-                      {/* Режим single - одно поле для сканирования */}
                       {scanMode === 'single' && (
                         <View style={styles.addCodeSection}>
                           <Text style={styles.addCodeSectionTitle}>
@@ -772,7 +738,6 @@ export const SearchScreen = () => {
                         </View>
                       )}
 
-                      {/* Режим dual - два поля для barcode и QR */}
                       {scanMode === 'dual' && (
                         <View style={styles.dualScanSection}>
                           <Text style={styles.addCodeSectionTitle}>
@@ -780,7 +745,6 @@ export const SearchScreen = () => {
                             {boxNumber ? ` в коробку №${boxNumber}` : ''}
                           </Text>
 
-                          {/* Индикатор стадии */}
                           <View style={styles.stageIndicator}>
                             <View
                               style={[
@@ -806,7 +770,6 @@ export const SearchScreen = () => {
                             </View>
                           </View>
 
-                          {/* Поле для barcode */}
                           <View style={styles.dualInputContainer}>
                             <Text style={styles.fieldLabel}>Штрихкод</Text>
                             <TextInput
@@ -831,7 +794,6 @@ export const SearchScreen = () => {
                             />
                           </View>
 
-                          {/* Поле для QR */}
                           <View style={styles.dualInputContainer}>
                             <Text style={styles.fieldLabel}>
                               QR-код с массой
@@ -855,7 +817,6 @@ export const SearchScreen = () => {
                             />
                           </View>
 
-                          {/* Кнопки управления */}
                           <View style={styles.dualButtonsContainer}>
                             <TouchableOpacity
                               style={styles.resetDualButton}
@@ -870,7 +831,6 @@ export const SearchScreen = () => {
                         </View>
                       )}
 
-                      {/* Печать этикетки коробки */}
                       {boxNumber && (
                         <TouchableOpacity
                           style={styles.secondaryButton}
@@ -882,7 +842,6 @@ export const SearchScreen = () => {
                         </TouchableOpacity>
                       )}
 
-                      {/* Печать этикетки паллеты */}
                       {palletNumber && (
                         <TouchableOpacity
                           style={styles.secondaryButton}
@@ -894,7 +853,6 @@ export const SearchScreen = () => {
                         </TouchableOpacity>
                       )}
 
-                      {/* Удаление кода */}
                       <TouchableOpacity
                         style={styles.dangerButton}
                         onPress={handleDeleteCode}
@@ -906,7 +864,6 @@ export const SearchScreen = () => {
                 </>
               )}
 
-              {/* Действия с коробкой */}
               {isBoxType && (
                 <>
                   <TouchableOpacity
@@ -932,7 +889,6 @@ export const SearchScreen = () => {
                 </>
               )}
 
-              {/* Действия с паллетой */}
               {isPalletType && (
                 <>
                   <TouchableOpacity
@@ -958,7 +914,6 @@ export const SearchScreen = () => {
                 </>
               )}
 
-              {/* Кнопка очистки */}
               <TouchableOpacity
                 style={styles.clearButton}
                 onPress={() => {
@@ -976,7 +931,6 @@ export const SearchScreen = () => {
         </View>
       </ScrollView>
 
-      {/* Модальное окно действий */}
       {formattedResponse?.searchData && (
         <ActionsModal
           visible={showActionsModal}
@@ -1147,7 +1101,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e9ecef',
   },
-  // Стили для выбора режима сканирования
   scanModeSelector: {
     flexDirection: 'row',
     marginBottom: 12,
@@ -1173,7 +1126,6 @@ const styles = StyleSheet.create({
   scanModeButtonTextActive: {
     color: 'white',
   },
-  // Стили для single режима
   addCodeSection: {
     backgroundColor: '#f0fff4',
     borderRadius: 10,
@@ -1220,7 +1172,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
-  // Стили для dual режима
   dualScanSection: {
     backgroundColor: '#f0f8ff',
     borderRadius: 10,

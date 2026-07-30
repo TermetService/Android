@@ -1,6 +1,6 @@
 // src/services/api.ts (полный файл)
 import { Config } from '../config';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 
 export class ApiService {
   // Вспомогательный метод для проверки ошибки таблицы
@@ -214,14 +214,17 @@ export class ApiService {
       return {
         success: true,
         message: data.message || 'Этикетка коробки напечатана',
-        data: data.data
+        data: data.data,
       };
     } catch (error) {
       console.error('Ошибка печати коробки:', error);
       // Возвращаем объект с ошибкой, а не выбрасываем её
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Неизвестная ошибка при печати коробки'
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Неизвестная ошибка при печати коробки',
       };
     }
   }
@@ -245,7 +248,7 @@ export class ApiService {
             countInPallet,
             productCountInPallet,
           }),
-        }
+        },
       );
 
       console.log('PrintPallet response status:', response.status);
@@ -278,13 +281,16 @@ export class ApiService {
       return {
         success: true,
         message: data.message || 'Этикетка паллеты напечатана',
-        data: data.data
+        data: data.data,
       };
     } catch (error) {
       console.error('Ошибка печати паллеты:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Неизвестная ошибка при печати паллеты'
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Неизвестная ошибка при печати паллеты',
       };
     }
   }
@@ -830,6 +836,69 @@ export class ApiService {
     } catch (error) {
       console.error('Ошибка получения веса паллеты:', error);
       return { success: false, weight: 0 };
+    }
+  }
+
+  static async getCurrentMode() {
+    try {
+    } catch (error) {
+      console.error('Ошибка получения веса паллеты:', error);
+      return '0';
+    }
+  }
+
+  static async getWorkMode(): Promise<{
+    success: boolean;
+    mode?: '1' | '2';
+    message?: string;
+  }> {
+    try {
+      const response = await fetch(`${Config.SERVER_URL}/code/mode`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const responseText = await response.text();
+      console.log('Ответ получения режима работы:', responseText);
+
+      if (this.isTableNotExistsError(responseText)) {
+        return { success: false, message: 'Фасовка не начата' };
+      }
+
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Сервер вернул пустой ответ');
+      }
+
+      const responseData = JSON.parse(responseText);
+
+      if (!response.ok) {
+        const message =
+          responseData?.error ||
+          responseData?.message ||
+          'Ошибка при получении режима работы';
+        return { success: false, message };
+      }
+
+      const mode = String(responseData?.mode ?? responseData?.data?.mode ?? '');
+
+      if (mode === '1' || mode === '2') {
+        return { success: true, mode };
+      }
+
+      // Пришёл ответ, но режим не '1' и не '2' — считаем, что фасовка не начата
+      return { success: false, message: 'Фасовка не начата' };
+    } catch (error) {
+      console.error('Ошибка получения режима работы:', error);
+      return {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Ошибка при получении режима работы',
+      };
     }
   }
 }
