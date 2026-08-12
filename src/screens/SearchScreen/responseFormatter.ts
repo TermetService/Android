@@ -110,7 +110,7 @@ export const formatSearchResponse = (result: any): FormattedResponse => {
   // Безопасно извлекаем данные из code
   const codeEntity = result.code || {};
   const from = result.from;
-  const countIn = result.countIn || 0;
+  const countIn = result.countInBox || 0;
 
   // Проверяем from
   if (!from) {
@@ -174,7 +174,7 @@ export const formatSearchResponse = (result: any): FormattedResponse => {
         title: 'Паллета найдена',
         message:
           `Номер паллеты: ${codeEntity.pallet_number || 'Неизвестно'}\n` +
-          `Общее количество единиц: ${countIn}\n`   +
+          `Общее количество единиц: ${countIn}\n` +
           `Коробка: ${codeEntity.box_number || 'Неизвестно'}`,
         type: 'success',
         showActionButton: true,

@@ -144,15 +144,15 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
             });
             setShowCustomAlert(true);
           }
-
+          console.log(result, '14326456');
           // Обновляем информацию о коробке из ответа
-          if (result.success && result.data?.result) {
+          if (result.success) {
             setBoxInfo({
-              boxNumber: result.data.result.boxNumber,
-              palletNumber: result.data.result.palletNumber,
-              productsInBox: result.data.result.productsInBox,
+              boxNumber: result.data.result.data.boxNumber,
+              palletNumber: result.data.result.data.palletNumber,
+              productsInBox: result.data.result.data.productsInBox,
               limitProductsInBox:
-                parseInt(result.data.result.limitProductsInBox) || 2,
+                parseInt(result.data.result.data.limitProductsInBox) || 2,
             });
           }
         } catch (error) {
@@ -173,6 +173,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
   }, [requestQueue, isSubmitting]);
   const [canScan, setCanScan] = useState(true);
   const SCAN_DELAY = 100; // 100 мс задержка между сканами
+
   const handleSubmit = () => {
     const trimmedCode = code.trim();
     if (!trimmedCode) return;
@@ -219,11 +220,11 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
   };
 
   // Обработка нажатия Enter
-  const handleKeyPress = (event: any) => {
-    if (event.nativeEvent.key === 'Enter') {
-      handleSubmit();
-    }
-  };
+  // const handleKeyPress = (event: any) => {
+  //   if (event.nativeEvent.key === 'Enter') {
+  //     handleSubmit();
+  //   }
+  // };
 
   // Обработчик закрытия кастомного алерта
   const handleAlertClose = () => {
@@ -349,7 +350,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
             value={code}
             onChangeText={setCode}
             onSubmitEditing={handleSubmit}
-            onKeyPress={handleKeyPress}
             placeholder={
               requestQueue.length > 0
                 ? `Очередь: ${requestQueue.length} | Введите код...`
