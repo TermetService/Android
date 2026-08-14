@@ -1,3 +1,4 @@
+// SearchScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -5,6 +6,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { AutoSearchInput } from '../../components/AutoSearchInput';
 import { SearchResultDisplay } from '../../components/SearchResultDisplay';
@@ -18,6 +20,8 @@ import { useModalHandlers } from './hooks/useModalHandlers';
 import { useContinueHandler } from './hooks/useContinueHandler';
 import { SearchButtons } from './components/SearchButtons';
 import { ContinueButton } from './components/ContinueButton';
+import { ReturnCodeModal } from '../../components/ReturnCodeModal';
+import { ApiService } from '../../services/api';
 
 export const SearchScreen = () => {
   const searchLogic = useSearchLogic();
@@ -35,6 +39,8 @@ export const SearchScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [labelModalVisible, setLabelModalVisible] = useState(false);
   const [addToBoxModalVisible, setAddToBoxModalVisible] = useState(false);
+  const [returnModalVisible, setReturnModalVisible] = useState(false);
+  const [returnLoading, setReturnLoading] = useState(false);
 
   const modalHandlers = useModalHandlers({
     lastSearchedCode,
@@ -50,15 +56,58 @@ export const SearchScreen = () => {
 
   const serverUrl = Config?.SERVER_URL || 'не указан';
   const shouldShowActions = modalHandlers.shouldShowActions(searchResult, loading, foundCodeData);
-  console.log('=======================', searchResult);
 
+  // ✅ ОБЕ КНОПКИ ВСЕГДА ПОКАЗЫВАЮТСЯ ВМЕСТЕ
+  const shouldShowButtons = !!(
+    searchResult &&
+    !loading &&
+    searchResult.from === 'code'
+  );
+
+  const showAddButtonCondition = !!(
+    showAddButton &&           // таймер активен (60 сек)
+    shouldShowButtons
+  );
+
+  const showReturnButton = shouldShowButtons;
+
+  // Отладка
+  console.log('🔍 searchResult:', searchResult);
+  console.log('📌 shouldShowButtons:', shouldShowButtons);
+  console.log('📌 showAddButtonCondition:', showAddButtonCondition);
+  console.log('📌 showReturnButton:', showReturnButton);
+
+  // Обработчик возврата кода
+  const handleReturnCode = async () => {
+    if (!lastSearchedCode) {
+      Alert.alert('Ошибка', 'Код не найден');
+      return;
+    }
+
+    setReturnLoading(true);
+    try {
+      const result = await ApiService.returnCodeToLaser(lastSearchedCode);
+
+      if (result.success) {
+        Alert.alert('✅ Успешно', result.message);
+        searchLogic.resetSearch();
+        setReturnModalVisible(false);
+      } else {
+        Alert.alert('❌ Ошибка', result.message);
+      }
+    } catch (error) {
+      Alert.alert('❌ Ошибка', 'Не удалось вернуть код');
+      console.error(error);
+    } finally {
+      setReturnLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      {/* Кнопка "Продолжить" выше поля поиска */}
       <View style={styles.continueButtonContainer}>
         <ContinueButton
           onPress={continueHandler.handleContinue}
@@ -75,8 +124,6 @@ export const SearchScreen = () => {
             Сервер: {serverUrl}
           </Text>
         </View>
-
-
 
         <AutoSearchInput
           value={query}
@@ -95,29 +142,25 @@ export const SearchScreen = () => {
         />
 
         <SearchResultDisplay
-          result={searchResult} // Убедитесь, что это searchResult из useSearchLogic
+          result={searchResult}
           loading={loading}
         />
 
-        {/* Добавьте отладочный текст */}
         <Text style={{ color: 'gray', fontSize: 10, textAlign: 'center', marginTop: 4 }}>
           Debug: success={searchResult?.success?.toString()},
+          from={searchResult?.from}
           boxNumber={searchResult?.boxNumber}
           boxLabel={searchResult?.boxLabel}
         </Text>
 
-        {/* Остальные кнопки (добавить в упаковку и действия) */}
+        {/* ✅ КНОПКИ ВСЕГДА РЯДОМ */}
         <SearchButtons
-          showAddButton={!!(
-            showAddButton &&
-            searchResult &&
-            !searchResult.success &&
-            !loading &&
-            searchResult.from === 'code'  // ДОБАВИТЬ эту проверку
-          )}
+          showAddButton={showAddButtonCondition}
+          showReturnButton={showReturnButton}
           showActions={shouldShowActions}
           loading={loading}
           onAddToPackage={modalHandlers.handleAddToPackage}
+          onReturnCode={() => setReturnModalVisible(true)}
           onOpenActionsModal={() => setModalVisible(true)}
         />
 
@@ -133,6 +176,14 @@ export const SearchScreen = () => {
           onBind={modalHandlers.handleBindLabel}
           loading={loading}
           boxNumber={foundCodeData?.code?.box_number}
+        />
+
+        <ReturnCodeModal
+          visible={returnModalVisible}
+          code={lastSearchedCode || ''}
+          onConfirm={handleReturnCode}
+          onCancel={() => setReturnModalVisible(false)}
+          loading={returnLoading}
         />
 
         <View style={styles.serverStatus}>

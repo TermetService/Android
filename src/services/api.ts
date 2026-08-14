@@ -58,6 +58,51 @@ export class ApiService {
     }
   }
 
+  static async returnCodeToLaser(code: string): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+  }> {
+    try {
+      console.log(`Возврат кода в лазер: ${code}`);
+
+      const response = await fetch(`${Config.SERVER_URL}/code/return-to-laser`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      const responseText = await response.text();
+      console.log('Ответ возврата:', responseText);
+
+      if (!response.ok) {
+        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
+      }
+
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Сервер вернул пустой ответ');
+      }
+
+      const result = JSON.parse(responseText);
+
+      return {
+        success: result.success === true,
+        message: result.message || 'Код возвращен',
+        data: result.data
+      };
+
+    } catch (error) {
+      console.error('Ошибка возврата кода:', error);
+      return {
+        success: false,
+        message: `Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
+      };
+    }
+  }
+
   static async handSave(code: string) {
     try {
       console.log(`Ручное сохранение кода: ${code}`);
