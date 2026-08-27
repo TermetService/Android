@@ -6,6 +6,7 @@ import { HandWorkScreen } from './src/screens/HandWorkScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import { BurgerMenu } from './src/components/BurgerMenu';
 import { Header } from './src/components/Header';
+import { SocketProvider } from './src/context/SocketContext';
 
 enum Pages {
   Page1 = 'search',
@@ -40,29 +41,31 @@ const App = () => {
   ];
 
   return (
-    <>
-      {/* <Header /> */}
-      {/* Рендерим текущий экран */}
-      {renderScreen()}
+    <SocketProvider>
+      <>
+        {/* <Header /> */}
+        {/* Рендерим текущий экран */}
+        {renderScreen()}
 
-      {/* Бургер-меню всегда поверх экрана */}
-      <BurgerMenu menuItems={menuItems} />
+        {/* Бургер-меню всегда поверх экрана */}
+        <BurgerMenu menuItems={menuItems} />
 
-      {/* Toast поверх всего */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          pointerEvents: 'box-none',
-          zIndex: 9998,
-        }}
-      >
-        <Toast />
-      </View>
-    </>
+        {/* Toast поверх всего */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            pointerEvents: 'box-none',
+            zIndex: 9998,
+          }}
+        >
+          <Toast />
+        </View>
+      </>
+    </SocketProvider>
   );
 };
 

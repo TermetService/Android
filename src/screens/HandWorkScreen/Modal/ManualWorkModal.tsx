@@ -12,8 +12,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ApiService } from '../../../services/api';
 import { CustomAlert } from '../../../components/CustomAlert';
 import { Config } from '../../../config';
+import { useSocket } from '../../../context/SocketContext';
+import { scannerService } from '../../../services/ScannerService';
 
-// Компонент модального окна ручной работы
 interface ManualWorkModalProps {
   visible: boolean;
   onClose: () => void;
@@ -30,6 +31,8 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
   visible,
   onClose,
 }) => {
+  const { socket, isConnected } = useSocket(); // ✅ Добавили isConnected
+
   const [code, setCode] = useState('');
   const [boxInfo, setBoxInfo] = useState<BoxInfo | null>(null);
   const [showCustomAlert, setShowCustomAlert] = useState(false);
@@ -41,63 +44,76 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
   const [serverStatus, setServerStatus] = useState<
     'checking' | 'online' | 'offline'
   >('checking');
-
-  // Очередь с ограничением
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requestQueue, setRequestQueue] = useState<string[]>([]);
-  const MAX_QUEUE_SIZE = 10; // Максимальный размер очереди
-
-  // const title = Config.USER_ID;
+  const MAX_QUEUE_SIZE = 10;
   const serverUrl = Config.SERVER_URL;
-
   const inputRef = useRef<TextInput>(null);
+  const [canScan, setCanScan] = useState(true);
+  const SCAN_DELAY = 100;
 
-  const pingServer = async () => {
-    try {
-      setServerStatus('checking');
-      const startTime = Date.now();
+  // ✅ ИСПРАВЛЕННАЯ ПОДПИСКА - с проверкой isConnected
+  useEffect(() => {
+    console.log(
+      '🔍 useEffect сработал, socket:',
+      !!socket,
+      'isConnected:',
+      isConnected,
+    );
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-      const response = await fetch(`${serverUrl}/code/ping`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const pingTime = Date.now() - startTime;
-        console.log(`Пинг сервера: ${pingTime}ms`);
-        setServerStatus('online');
-      } else {
-        setServerStatus('offline');
-      }
-    } catch (error) {
-      console.log('Ошибка пинга сервера:', error);
-      setServerStatus('offline');
+    // Проверяем, что socket существует и подключен
+    if (!socket) {
+      console.log('⚠️ Socket не инициализирован');
+      return;
     }
-  };
 
-  // Звуковая индикация (для ТСД)
-  const playBeep = (type: 'success' | 'error') => {
-    // Здесь код для воспроизведения звукового сигнала ТСД
-    console.log(`${type === 'success' ? '✓' : '✗'}`);
-  };
+    if (!isConnected) {
+      console.log('⚠️ Сокет не подключен к серверу, подписка отложена');
+      return;
+    }
 
+    console.log('✅ Подписка на событие message1');
+
+    // Обработчик события
+    const handleMessage1 = (data: any) => {
+      console.log('📨 Получено message1:', JSON.stringify(data));
+
+      // Проверяем, что это сообщение от сервера
+      console.log('🎯 Запуск сканирования по команде сервера');
+      scannerService.startScan();
+    };
+
+    // Подписываемся
+    socket.on('Shoot', handleMessage1);
+
+    // Отправляем тестовое сообщение на сервер
+    socket.emit('message', {
+      text: 'Клиент готов к работе',
+      from: 'ManualWorkModal',
+    });
+
+    // Очистка при размонтировании
+    return () => {
+      console.log('🧹 Очистка подписки message1');
+      socket.off('message1', handleMessage1);
+    };
+  }, [socket, isConnected]); // ✅ Добавили isConnected в зависимости
+
+  // ✅ Дополнительный эффект для отслеживания подключения
+  useEffect(() => {
+    if (socket && isConnected) {
+      console.log('✅ Сокет подключен, можно отправлять сообщения');
+    } else {
+      console.log('⏳ Ожидание подключения сокета...');
+    }
+  }, [socket, isConnected]);
+
+  // Остальные useEffect'ы
   useEffect(() => {
     if (visible) {
       pingServer();
-
       const intervalId = setInterval(pingServer, 30000);
-
-      return () => {
-        clearInterval(intervalId);
-      };
+      return () => clearInterval(intervalId);
     }
   }, [visible]);
 
@@ -115,7 +131,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
       setBoxInfo(null);
       setCode('');
       setServerStatus('checking');
-      setRequestQueue([]); // Очищаем очередь при закрытии
+      setRequestQueue([]);
     }
   }, [visible]);
 
@@ -128,14 +144,9 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
 
         try {
           const result = await ApiService.handSave(currentCode);
-
-          // Убираем обработанный запрос
           setRequestQueue(prev => prev.slice(1));
-
-          // Звуковой сигнал
           playBeep(result.success ? 'success' : 'error');
 
-          // Показываем алерт только для ошибок
           if (!result.success) {
             setAlertConfig({
               title: '⚠️ Ошибка',
@@ -145,7 +156,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
             setShowCustomAlert(true);
           }
 
-          // Обновляем информацию о коробке из ответа
           if (result.success && result.data?.result) {
             setBoxInfo({
               boxNumber: result.data.result.boxNumber,
@@ -171,8 +181,39 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
 
     processQueue();
   }, [requestQueue, isSubmitting]);
-  const [canScan, setCanScan] = useState(true);
-  const SCAN_DELAY = 100; // 100 мс задержка между сканами
+
+  const pingServer = async () => {
+    try {
+      setServerStatus('checking');
+      const startTime = Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+      const response = await fetch(`${serverUrl}/code/ping`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const pingTime = Date.now() - startTime;
+        console.log(`Пинг сервера: ${pingTime}ms`);
+        setServerStatus('online');
+      } else {
+        setServerStatus('offline');
+      }
+    } catch (error) {
+      console.log('Ошибка пинга сервера:', error);
+      setServerStatus('offline');
+    }
+  };
+
+  const playBeep = (type: 'success' | 'error') => {
+    console.log(`${type === 'success' ? '✓' : '✗'}`);
+  };
+
   const handleSubmit = () => {
     const trimmedCode = code.trim();
     if (!trimmedCode) return;
@@ -190,7 +231,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
       return;
     }
 
-    // Проверка размера очереди
     if (requestQueue.length >= MAX_QUEUE_SIZE) {
       playBeep('error');
       setAlertConfig({
@@ -204,39 +244,32 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
       return;
     }
 
-    // Добавляем в очередь
     setRequestQueue(prev => [...prev, trimmedCode]);
     setCanScan(false);
-    // Очищаем поле для следующего скана
     setCode('');
     inputRef.current?.focus();
     setTimeout(() => {
       setCanScan(true);
       inputRef.current?.focus();
     }, SCAN_DELAY);
-    // Короткий сигнал подтверждения сканирования
     playBeep('success');
   };
 
-  // Обработка нажатия Enter
   const handleKeyPress = (event: any) => {
     if (event.nativeEvent.key === 'Enter') {
       handleSubmit();
     }
   };
 
-  // Обработчик закрытия кастомного алерта
   const handleAlertClose = () => {
     setShowCustomAlert(false);
   };
 
-  // Вычисление процента заполнения коробки
   const getFillPercentage = (): number => {
     if (!boxInfo) return 0;
     return (boxInfo.productsInBox / boxInfo.limitProductsInBox) * 100;
   };
 
-  // Получение цвета и иконки для статуса сервера
   const getServerStatusIcon = () => {
     switch (serverStatus) {
       case 'online':
@@ -250,7 +283,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
     }
   };
 
-  // Отображение статуса очереди (используем существующие стили)
   const renderQueueStatus = () => {
     if (requestQueue.length > 0) {
       return (
@@ -275,12 +307,8 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalContainer}
       >
-        {/* Информация об операторе и сервере */}
         <View style={styles.modalHeader}>
           <View style={styles.infoContainer}>
-            {/* <Text style={styles.modalOperatorTitle}>
-                            Оператор №{title}
-                        </Text> */}
             <TouchableOpacity
               onPress={pingServer}
               style={styles.serverInfoButton}
@@ -299,7 +327,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
           </View>
         </View>
 
-        {/* Заголовок модального окна */}
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Режим ручной работы</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -307,10 +334,8 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Статус очереди */}
         {renderQueueStatus()}
 
-        {/* Информация о коробке (вверху экрана) */}
         {boxInfo && (
           <View style={styles.boxInfoContainer}>
             <View style={styles.boxIconWrapper}>
@@ -341,7 +366,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
           </View>
         )}
 
-        {/* Поле ввода по центру оставшейся части экрана */}
         <View style={styles.inputWrapper}>
           <TextInput
             ref={inputRef}
@@ -365,7 +389,6 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
           />
         </View>
 
-        {/* Кастомный алерт */}
         <CustomAlert
           visible={showCustomAlert}
           title={alertConfig.title}

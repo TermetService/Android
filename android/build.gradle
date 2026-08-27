@@ -10,11 +10,27 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        maven {
+            allowInsecureProtocol = true
+            url "http://47.108.228.164:8081/nexus/service/local/repositories/releases/content/"
+        }
     }
     dependencies {
         classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+// Добавьте этот блок
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            allowInsecureProtocol = true
+            url "http://47.108.228.164:8081/nexus/service/local/repositories/releases/content/"
+        }
     }
 }
 
