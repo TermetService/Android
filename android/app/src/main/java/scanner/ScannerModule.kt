@@ -30,6 +30,8 @@ class ScannerModule(reactContext: ReactApplicationContext) :
                     override fun onResult(result: String) {
                         Log.d(TAG, "✅ Scan result: $result")
                         sendScanResultToJS(result)
+                        // Останавливаем сканер через reflection
+                        stopScannerInternal()
                     }
                 })
 
@@ -55,6 +57,8 @@ class ScannerModule(reactContext: ReactApplicationContext) :
                     override fun onResult(result: String) {
                         Log.d(TAG, "✅ Scan result: $result")
                         sendScanResultToJS(result)
+                        // Останавливаем сканер через reflection
+                        stopScannerInternal()
                     }
                 })
                 isInitialized = true
@@ -76,15 +80,23 @@ class ScannerModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun stopScan(promise: Promise) {
         try {
-            // Используем reflection с правильным синтаксисом Kotlin
-            val method = XcBarcodeScanner::class.java.getMethod("stopScan")
-            method.invoke(null)
-
+            stopScannerInternal()
             Log.d(TAG, "✅ Scan stopped via SDK")
             promise.resolve(true)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error stopping scan: ${e.message}", e)
             promise.reject("SCAN_ERROR", "Failed to stop scan: ${e.message}", e)
+        }
+    }
+
+    // Внутренний метод для остановки сканера (доступен из любого места класса)
+    private fun stopScannerInternal() {
+        try {
+            val method = XcBarcodeScanner::class.java.getMethod("stopScan")
+            method.invoke(null)
+            Log.d(TAG, "✅ Scanner stopped after successful scan")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error stopping scanner: ${e.message}", e)
         }
     }
 
