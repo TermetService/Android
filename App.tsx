@@ -7,6 +7,7 @@ import { SearchScreen } from './src/screens/SearchScreen';
 import { BurgerMenu } from './src/components/BurgerMenu';
 import { Header } from './src/components/Header';
 import { SocketProvider } from './src/context/SocketContext';
+import { ManualWorkModal } from './src/screens/HandWorkScreen/Modal/ManualWorkModal';
 
 enum Pages {
   Page1 = 'search',
@@ -45,8 +46,8 @@ const App = () => {
       <>
         {/* <Header /> */}
         {/* Рендерим текущий экран */}
-        {renderScreen()}
-
+        {/* {renderScreen()} */}
+        <ManualWorkModal visible={true} onClose={() => {}} />
         {/* Бургер-меню всегда поверх экрана */}
         <BurgerMenu menuItems={menuItems} />
 

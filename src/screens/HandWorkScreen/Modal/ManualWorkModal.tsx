@@ -327,16 +327,16 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
           </View>
         </View>
 
-        <View style={styles.modalHeader}>
+        {/* <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Режим ручной работы</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {renderQueueStatus()}
 
-        {boxInfo && (
+        {/* {boxInfo && (
           <View style={styles.boxInfoContainer}>
             <View style={styles.boxIconWrapper}>
               <View style={styles.boxIcon}>
@@ -364,7 +364,7 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
               </View>
             </View>
           </View>
-        )}
+        )} */}
 
         <View style={styles.inputWrapper}>
           <TextInput
