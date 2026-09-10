@@ -7,24 +7,62 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { styles } from './styles';
 import { ManualWorkModal } from './Modal/ManualWorkModal';
+import { ManualWorkModalOld } from './Modal/ManualWorkModalOld';
+import { ApiService } from '../../services/api.ts';
+
 
 export const HandWorkScreen = () => {
-  const [showManualModal, setShowManualModal] = useState(true);
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [isUsingApi, setIsUsingApi] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const startHandWork = async () => {
-    setShowManualModal(true);
+  useEffect(() => {
+    checkApiStatus();
+  }, []);
+
+  const checkApiStatus = async () => {
+    setIsLoading(true);
+    try {
+      const status = await ApiService.getApiStatus();
+      console.log('API Status:', status);
+
+      setIsUsingApi(status.isUsingApi);
+      setShowManualModal(true);
+    } catch (error) {
+      console.error('Ошибка при проверке статуса API:', error);
+      // При ошибке показываем новую версию (isUsingApi = false)
+      setIsUsingApi(false);
+      setShowManualModal(false);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const stopHandWork = async () => {
+  const startHandWork = async () => {
+    await checkApiStatus();
+  };
+
+  const stopHandWork = () => {
     setShowManualModal(false);
   };
 
-  useEffect(() => {
-    startHandWork();
-  }, []);
+  // Функция для рендеринга нужной модалки
+  const renderModal = () => {
+    if (isUsingApi === null) {
+      return null;
+    }
+
+    if (isUsingApi === true) {
+      return (
+        <ManualWorkModalOld visible={showManualModal} onClose={stopHandWork} />
+      );
+    }
+    return <ManualWorkModal visible={showManualModal} onClose={stopHandWork} />;
+  };
 
   return (
     <>
@@ -41,159 +79,23 @@ export const HandWorkScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.centerContainer}>
-            {/* Кнопка "Начать ручную работу" */}
             <TouchableOpacity
-              style={styles.startButton}
-              onPress={startHandWork} // Прямой вызов без подтверждения
+              style={[styles.startButton, isLoading && { opacity: 0.5 }]}
+              onPress={startHandWork}
               activeOpacity={0.7}
+              disabled={isLoading}
             >
-              <Text style={styles.startButtonText}>Начать ручную работу</Text>
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.startButtonText}>Начать ручную работу</Text>
+              )}
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Модальное окно "Режим ручной работы" */}
-      <ManualWorkModal visible={showManualModal} onClose={stopHandWork} />
+      {renderModal()}
     </>
   );
 };
-
-// // Компонент модального окна ручной работы
-// interface ManualWorkModalProps {
-//   visible: boolean;
-//   onClose: () => void;
-// }
-
-// const ManualWorkModal: React.FC<ManualWorkModalProps> = ({ visible, onClose }) => {
-//   const [code, setCode] = useState('');
-//   const [showCustomAlert, setShowCustomAlert] = useState(false);
-//   const [alertConfig, setAlertConfig] = useState({
-//     title: '',
-//     message: '',
-//     type: 'success' as 'success' | 'error',
-//   });
-
-//   const inputRef = useRef<TextInput>(null);
-
-//   // Автофокус при открытии модального окна
-//   useEffect(() => {
-//     if (visible) {
-//       const timer = setTimeout(() => {
-//         inputRef.current?.focus();
-//       }, 300);
-//       return () => clearTimeout(timer);
-//     }
-//   }, [visible]);
-
-//   const resetInput = () => {
-//     // Очищаем поле ввода после алерта
-//     setCode('');
-//     // Возвращаем фокус на поле ввода
-//     setTimeout(() => inputRef.current?.focus(), 100);
-//   };
-
-//   // Обработка отправки кода
-//   const handleSubmit = async () => {
-//     const trimmedCode = code.trim();
-//     if (!trimmedCode) return;
-
-//     try {
-//       const result = await ApiService.handSave(trimmedCode);
-//       console.log(`Ручное сохранение кода: ----============= ${JSON.stringify(result)}`);
-
-//       // Настраиваем кастомный алерт в зависимости от результата
-//       if (result.success) {
-//         setAlertConfig({
-//           title: '✅ Успешно',
-//           message: result.message, // теперь здесь будет информативное сообщение
-//           type: 'success',
-//         });
-//       } else {
-//         setAlertConfig({
-//           title: '⚠️ Ошибка',
-//           message: result.message,
-//           type: 'error',
-//         });
-//       }
-
-//       setShowCustomAlert(true);
-
-//     } catch (error) {
-//       setAlertConfig({
-//         title: '❌ Ошибка',
-//         message: 'Произошла ошибка при сохранении кода',
-//         type: 'error',
-//       });
-//       setShowCustomAlert(true);
-//     }
-//   };
-
-//   // Обработка нажатия Enter
-//   const handleKeyPress = (event: any) => {
-//     if (event.nativeEvent.key === 'Enter') {
-//       handleSubmit();
-//     }
-//   };
-
-//   // Обработчик закрытия кастомного алерта
-//   const handleAlertClose = () => {
-//     setShowCustomAlert(false);
-//     resetInput();
-//   };
-
-//   return (
-//     <Modal
-//       visible={visible}
-//       animationType="slide"
-//       transparent={false}
-//       onRequestClose={onClose}
-//     >
-//       <KeyboardAvoidingView
-//         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-//         style={styles.modalContainer}
-//       >
-//         {/* Заголовок модального окна */}
-//         <View style={styles.modalHeader}>
-//           <Text style={styles.modalTitle}>Режим ручной работы</Text>
-//           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-//             <Text style={styles.closeButtonText}>✕</Text>
-//           </TouchableOpacity>
-//         </View>
-
-//         {/* Основное содержимое - поле ввода по центру */}
-//         <View style={styles.modalContent}>
-//           <TextInput
-//             ref={inputRef}
-//             style={styles.manualWorkInput}
-//             value={code}
-//             onChangeText={setCode}
-//             onSubmitEditing={handleSubmit}
-//             onKeyPress={handleKeyPress}
-//             placeholder="Введите код"
-//             placeholderTextColor="#999"
-//             autoCapitalize="characters"
-//             autoCorrect={false}
-//             autoFocus={true}
-//             returnKeyType="done"
-//             blurOnSubmit={false}
-//           />
-
-//           <Text style={styles.inputHint}>
-//             Введите код и нажмите Enter для отправки
-//           </Text>
-//         </View>
-
-//         {/* Кастомный алерт */}
-//         <CustomAlert
-//           visible={showCustomAlert}
-//           title={alertConfig.title}
-//           message={alertConfig.message}
-//           type={alertConfig.type}
-//           onClose={handleAlertClose}
-//           autoCloseTime={alertConfig.type === 'success' ? 1000 : undefined}
-//         />
-//       </KeyboardAvoidingView>
-//     </Modal>
-//   );
-// };
