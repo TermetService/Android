@@ -220,61 +220,83 @@ export class ApiService {
     try {
       console.log(`Ручное сохранение кода: ${code}`);
 
-      const response = await fetch(`${Config.SERVER_URL}/code/hand-save`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `${Config.SERVER_URL}/aggregation/${Config.TSD_ID}`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ code }),
         },
-        body: JSON.stringify({ code, userId: Config.USER_ID }),
-      });
+      );
 
       const responseText = await response.text();
-      console.log(`Ручное сохранение кода: ${responseText}`);
 
-      if (this.isTableNotExistsError(responseText)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      if (!response.ok) {
-        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
-      }
+      console.log(`Ответ агрегации: ${responseText}`);
 
       if (!responseText || responseText.trim() === '') {
         throw new Error('Сервер вернул пустой ответ');
       }
 
-      const responseData = JSON.parse(responseText);
-      const isAddCode = responseData.result?.isAddCode === true;
+      let responseData: any;
 
-      let message = '';
-      if (isAddCode) {
-        message = `Код сохранен в коробку ${responseData.result?.boxNumber}, паллета ${responseData.result?.palletNumber}`;
-      } else {
-        message = responseData.message || 'Не удалось сохранить код';
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        responseData = responseText;
       }
 
-      return {
-        success: isAddCode,
-        message: message,
-        data: responseData,
-      };
-    } catch (error) {
-      console.error('Ошибка ручного сохранения:', error);
+      if (!response.ok) {
+        const message =
+          responseData?.message ||
+          responseData?.error ||
+          `Ошибка HTTP: ${response.status}`;
 
-      if (error instanceof Error && this.isTableNotExistsError(error.message)) {
+        Alert.alert(
+          'Ошибка',
+          Array.isArray(message)
+            ? message.join('\n')
+            : String(message),
+        );
+
         return {
           success: false,
-          message: 'Фасовка не начата',
+          message: String(message),
+          data: responseData,
+          expectedScan: null,
         };
       }
 
+      const expectedScan =
+        typeof responseData === 'string'
+          ? responseData
+          : responseData?.expectedScan ??
+            responseData?.data?.expectedScan ??
+            null;
+
+      return {
+        success: true,
+        message: 'Код успешно обработан',
+        data: responseData,
+        expectedScan,
+      };
+    } catch (error) {
+      console.error('Ошибка обработки кода:', error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Ошибка: попробуйте ещё раз.';
+
+      Alert.alert('Ошибка', message);
+
       return {
         success: false,
-        message: `Ошибка: попробуйте ещё раз.`,
+        message,
+        data: null,
+        expectedScan: null,
       };
     }
   }
@@ -567,4 +589,107 @@ export class ApiService {
       };
     }
   }
+    static async getTaskInWorkForTsd() {
+        try {
+            const response = await fetch(
+                `${Config.SERVER_URL}/task/tsd/${Config.TSD_ID}/in-work`,
+                {
+                    method: 'GET',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                },
+            );
+
+            if (!response.ok) {
+                const errorText = await response.text();
+
+                throw new Error(
+                    `HTTP ${response.status}: ${errorText}`,
+                );
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error(
+                'Ошибка получения задания в работе:',
+                error,
+            );
+
+            throw error;
+        }
+    }
+
+    static async getTaskUnprocessedForTsd() {
+        try {
+            const response = await fetch(
+                `${Config.SERVER_URL}/task/tsd/${Config.TSD_ID}/unprocessed`,
+                {
+                    method: 'GET',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                },
+            );
+
+            if (!response.ok) {
+                const errorText = await response.text();
+
+                throw new Error(
+                    `HTTP ${response.status}: ${errorText}`,
+                );
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error(
+                'Ошибка получения необработанного задания:',
+                error,
+            );
+
+            throw error;
+        }
+    }
+
+    static async startTask(taskId: number) {
+        try {
+            const response = await fetch(
+                `${Config.SERVER_URL}/task/${taskId}/start`,
+                {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tsdId: Config.TSD_ID,
+                    }),
+                },
+            );
+
+            if (!response.ok) {
+                const errorText = await response.text();
+
+                throw new Error(
+                    `HTTP ${response.status}: ${errorText}`,
+                );
+            }
+
+            const text = await response.text();
+
+            return text
+                ? JSON.parse(text)
+                : null;
+        } catch (error) {
+            console.error(
+                `Ошибка запуска задания ${taskId}:`,
+                error,
+            );
+
+            throw error;
+        }
+    }
+
 }

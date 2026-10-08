@@ -203,4 +203,31 @@ export const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
+
+expectedScanContainer: {
+  marginTop: 24,
+  padding: 20,
+  backgroundColor: '#f5f5f5',
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: '#dddddd',
+},
+
+expectedScanTitle: {
+  marginBottom: 8,
+  fontSize: 15,
+  color: '#666666',
+},
+
+expectedScanValue: {
+  fontSize: 20,
+  fontWeight: '600',
+  color: '#222222',
+},
+
+expectedScanType: {
+  marginTop: 8,
+  fontSize: 13,
+  color: '#888888',
+},
 });

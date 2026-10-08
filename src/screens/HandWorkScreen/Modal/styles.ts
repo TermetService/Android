@@ -148,4 +148,32 @@ export const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 1, // Уменьшил межбуквенный интервал
   },
+
+expectedScanContainer: {
+  marginHorizontal: 20,
+  marginBottom: 16,
+  padding: 16,
+  backgroundColor: '#f5f5f5',
+  borderWidth: 1,
+  borderColor: '#dddddd',
+  borderRadius: 12,
+},
+
+expectedScanTitle: {
+  marginBottom: 6,
+  fontSize: 14,
+  color: '#666666',
+},
+
+expectedScanValue: {
+  fontSize: 20,
+  fontWeight: '600',
+  color: '#222222',
+},
+
+expectedScanType: {
+  marginTop: 6,
+  fontSize: 13,
+  color: '#888888',
+},
 });

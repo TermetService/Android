@@ -1,28 +1,68 @@
-// App.tsx
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import Toast from 'react-native-toast-message';
+
+import { TaskSelectionScreen } from './src/screens/TaskSelectionScreen/TaskSelectionScreen';
 import { HandWorkScreen } from './src/screens/HandWorkScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
+
 import { BurgerMenu } from './src/components/BurgerMenu';
-import { Header } from './src/components/Header';
 
 enum Pages {
-  Page1 = 'search',
-  Page2 = 'handwork',
+  Search = 'search',
+  HandWork = 'handwork',
 }
 
 const App = () => {
-  const [currentScreen, setCurrentScreen] = useState<Pages>(Pages.Page1);
+  const [
+    currentScreen,
+    setCurrentScreen,
+  ] = useState<Pages>(
+    Pages.HandWork,
+  );
+
+  const [
+    taskId,
+    setTaskId,
+  ] = useState<number | null>(null);
+
+  const handleTaskSelected = (
+    selectedTaskId: number,
+  ) => {
+    setTaskId(selectedTaskId);
+    setCurrentScreen(
+      Pages.HandWork,
+    );
+  };
 
   const renderScreen = () => {
+    if (!taskId) {
+      return (
+        <TaskSelectionScreen
+          onTaskSelected={
+            handleTaskSelected
+          }
+        />
+      );
+    }
+
     switch (currentScreen) {
-      case Pages.Page1:
+      case Pages.Search:
         return <SearchScreen />;
-      case Pages.Page2:
-        return <HandWorkScreen />;
+
+      case Pages.HandWork:
+        return (
+          <HandWorkScreen
+            taskId={taskId}
+          />
+        );
+
       default:
-        return <SearchScreen />;
+        return (
+          <HandWorkScreen
+            taskId={taskId}
+          />
+        );
     }
   };
 
@@ -30,25 +70,31 @@ const App = () => {
     {
       id: '1',
       title: 'Поиск',
-      onPress: () => setCurrentScreen(Pages.Page1),
+      onPress: () =>
+        setCurrentScreen(
+          Pages.Search,
+        ),
     },
     {
       id: '2',
       title: 'Ручная работа',
-      onPress: () => setCurrentScreen(Pages.Page2),
+      onPress: () =>
+        setCurrentScreen(
+          Pages.HandWork,
+        ),
     },
   ];
 
   return (
     <>
-      {/* <Header /> */}
-      {/* Рендерим текущий экран */}
       {renderScreen()}
 
-      {/* Бургер-меню всегда поверх экрана */}
-      <BurgerMenu menuItems={menuItems} />
+      {taskId && (
+        <BurgerMenu
+          menuItems={menuItems}
+        />
+      )}
 
-      {/* Toast поверх всего */}
       <View
         style={{
           position: 'absolute',
