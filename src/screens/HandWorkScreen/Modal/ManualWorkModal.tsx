@@ -1,38 +1,27 @@
-import React, {
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
-
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Text,
-  TextInput,
-  TouchableOpacity,
   View,
+  Text,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  Modal,
+  TextInput,
 } from 'react-native';
-
-import { ApiService } from '../../../services/api';
-import { Config } from '../../../config';
-import { CustomAlert } from '../../../components/CustomAlert';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { styles } from './styles';
+import { ApiService } from '../../../services/api';
+import { CustomAlert } from '../../../components/CustomAlert';
+import { Config } from '../../../config';
 
-type ExpectedScanType =
-  | 'PRODUCT'
-  | 'SMALL_BOX_LABEL'
-  | 'BIG_BOX_LABEL'
-  | 'PALLET_LABEL';
+import { ExpectedScanType, getExpectedScanLabel } from '../expectedScan';
 
+// Компонент модального окна ручной работы
 interface ManualWorkModalProps {
   visible: boolean;
   onClose: () => void;
   expectedScan: ExpectedScanType | null;
-  onExpectedScanChange: (
-    expectedScan: ExpectedScanType,
-  ) => void;
+  onExpectedScanChange: (expectedScan: ExpectedScanType) => void;
 }
 
 interface BoxInfo {
@@ -42,176 +31,92 @@ interface BoxInfo {
   limitProductsInBox: number;
 }
 
-export const ManualWorkModal: React.FC<
-  ManualWorkModalProps
-> = ({
+export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
   visible,
   onClose,
   expectedScan,
   onExpectedScanChange,
 }) => {
   const [code, setCode] = useState('');
-
-  const [boxInfo, setBoxInfo] =
-    useState<BoxInfo | null>(null);
-
-  const [
-    showCustomAlert,
-    setShowCustomAlert,
-  ] = useState(false);
-
-  const [
-    alertConfig,
-    setAlertConfig,
-  ] = useState({
+  const [boxInfo, setBoxInfo] = useState<BoxInfo | null>(null);
+  const [showCustomAlert, setShowCustomAlert] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
     title: '',
     message: '',
     type: 'success' as 'success' | 'error',
   });
-
-  const [
-    serverStatus,
-    setServerStatus,
-  ] = useState<
+  const [serverStatus, setServerStatus] = useState<
     'checking' | 'online' | 'offline'
   >('checking');
 
-  const [
-    isSubmitting,
-    setIsSubmitting,
-  ] = useState(false);
+  // Очередь с ограничением
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requestQueue, setRequestQueue] = useState<string[]>([]);
+  const MAX_QUEUE_SIZE = 10; // Максимальный размер очереди
 
-  const [
-    requestQueue,
-    setRequestQueue,
-  ] = useState<string[]>([]);
-
-  const [
-    canScan,
-    setCanScan,
-  ] = useState(true);
-
-  const MAX_QUEUE_SIZE = 10;
-  const SCAN_DELAY = 100;
-
+  // const title = Config.USER_ID;
   const serverUrl = Config.SERVER_URL;
 
-  const inputRef =
-    useRef<TextInput>(null);
+  const inputRef = useRef<TextInput>(null);
 
-  const pingServer = async () => {
+  const pingServer = useCallback(async () => {
     try {
       setServerStatus('checking');
+      const startTime = Date.now();
 
-      const startTime =
-        Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-      const controller =
-        new AbortController();
-
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        3000,
-      );
-
-      const response =
-        await fetch(
-          `${serverUrl}/code/ping`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            signal: controller.signal,
-          },
-        );
+      const response = await fetch(`${serverUrl}/aggregation`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
 
       clearTimeout(timeoutId);
 
       if (response.ok) {
-        const pingTime =
-          Date.now() - startTime;
-
-        console.log(
-          `Пинг сервера: ${pingTime}ms`,
-        );
-
+        const pingTime = Date.now() - startTime;
+        console.log(`Пинг сервера: ${pingTime}ms`);
         setServerStatus('online');
       } else {
         setServerStatus('offline');
       }
     } catch (error) {
-      console.log(
-        'Ошибка пинга сервера:',
-        error,
-      );
-
+      console.log('Ошибка пинга сервера:', error);
       setServerStatus('offline');
     }
-  };
+  }, [serverUrl]);
 
-  const playBeep = (
-    type: 'success' | 'error',
-  ) => {
-    console.log(
-      type === 'success'
-        ? '✓'
-        : '✗',
-    );
-  };
-
-  const getExpectedScanLabel = (
-    scan: ExpectedScanType | null,
-  ) => {
-    switch (scan) {
-      case 'PRODUCT':
-        return 'Отсканируйте товар';
-
-      case 'SMALL_BOX_LABEL':
-        return 'Отсканируйте этикетку малой коробки';
-
-      case 'BIG_BOX_LABEL':
-        return 'Отсканируйте этикетку большой коробки';
-
-      case 'PALLET_LABEL':
-        return 'Отсканируйте этикетку паллеты';
-
-      default:
-        return 'Состояние задания не определено';
-    }
+  // Звуковая индикация (для ТСД)
+  const playBeep = (type: 'success' | 'error') => {
+    // Здесь код для воспроизведения звукового сигнала ТСД
+    console.log(`${type === 'success' ? '✓' : '✗'}`);
   };
 
   useEffect(() => {
-    if (!visible) {
-      return;
+    if (visible) {
+      void pingServer();
+
+      const intervalId = setInterval(() => {
+        void pingServer();
+      }, 30000);
+
+      return () => {
+        clearInterval(intervalId);
+      };
     }
-
-    void pingServer();
-
-    const intervalId =
-      setInterval(
-        pingServer,
-        30000,
-      );
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [visible]);
+  }, [visible, pingServer]);
 
   useEffect(() => {
-    if (!visible) {
-      return;
-    }
-
-    const timer =
-      setTimeout(() => {
+    if (visible) {
+      const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 300);
-
-    return () =>
-      clearTimeout(timer);
+      return () => clearTimeout(timer);
+    }
   }, [visible]);
 
   useEffect(() => {
@@ -219,269 +124,161 @@ export const ManualWorkModal: React.FC<
       setBoxInfo(null);
       setCode('');
       setServerStatus('checking');
-      setRequestQueue([]);
-      setCanScan(true);
+      setRequestQueue([]); // Очищаем очередь при закрытии
     }
   }, [visible]);
 
+  // Обработка очереди
   useEffect(() => {
-    const processQueue =
-      async () => {
-        if (
-          requestQueue.length === 0 ||
-          isSubmitting
-        ) {
-          return;
-        }
-
+    const processQueue = async () => {
+      if (requestQueue.length > 0 && !isSubmitting) {
         setIsSubmitting(true);
-
-        const currentCode =
-          requestQueue[0];
+        const currentCode = requestQueue[0];
 
         try {
-          const result =
-            await ApiService.handSave(
-              currentCode,
-            );
+          const result = await ApiService.handSave(currentCode);
 
-          setRequestQueue(
-            prev =>
-              prev.slice(1),
-          );
+          // Убираем обработанный запрос
+          setRequestQueue(prev => prev.slice(1));
 
-          playBeep(
-            result.success
-              ? 'success'
-              : 'error',
-          );
+          // Звуковой сигнал
+          playBeep(result.success ? 'success' : 'error');
 
+          // Показываем алерт только для ошибок
           if (!result.success) {
             setAlertConfig({
               title: '⚠️ Ошибка',
-              message:
-                result.message,
+              message: result.message,
               type: 'error',
             });
-
-            setShowCustomAlert(
-              true,
-            );
+            setShowCustomAlert(true);
           }
 
-          if (
-            result.success &&
-            result.expectedScan
-          ) {
-            onExpectedScanChange(
-              result.expectedScan,
-            );
+          // Обновляем ожидаемый тип сканирования из ответа сервера
+          if (result.success && result.expectedScan) {
+            onExpectedScanChange(result.expectedScan);
           }
 
-          if (
-            result.success &&
-            result.data?.result
-          ) {
+          // Обновляем информацию о коробке из ответа
+          if (result.success && result.data?.result) {
             setBoxInfo({
-              boxNumber:
-                result.data.result
-                  .boxNumber,
-              palletNumber:
-                result.data.result
-                  .palletNumber,
-              productsInBox:
-                result.data.result
-                  .productsInBox,
+              boxNumber: result.data.result.boxNumber,
+              palletNumber: result.data.result.palletNumber,
+              productsInBox: result.data.result.productsInBox,
               limitProductsInBox:
-                parseInt(
-                  result.data.result
-                    .limitProductsInBox,
-                  10,
-                ) || 2,
+                parseInt(result.data.result.limitProductsInBox, 10) || 2,
             });
           }
-        } catch (error) {
-          console.error(
-            'Ошибка обработки кода:',
-            error,
-          );
-
+        } catch {
           playBeep('error');
-
           setAlertConfig({
             title: '❌ Ошибка',
-            message:
-              'Ошибка соединения с сервером',
+            message: 'Ошибка соединения с сервером',
             type: 'error',
           });
-
-          setShowCustomAlert(
-            true,
-          );
+          setShowCustomAlert(true);
         } finally {
           setIsSubmitting(false);
         }
-      };
+      }
+    };
 
     void processQueue();
-  }, [
-    requestQueue,
-    isSubmitting,
-    onExpectedScanChange,
-  ]);
+  }, [requestQueue, isSubmitting, onExpectedScanChange]);
+
+  const [canScan, setCanScan] = useState(true);
+  const SCAN_DELAY = 100; // 100 мс задержка между сканами
 
   const handleSubmit = () => {
-    const trimmedCode =
-      code.trim();
-
-    if (!trimmedCode) {
-      return;
-    }
+    const trimmedCode = code.trim();
+    if (!trimmedCode) return;
 
     if (!canScan) {
       playBeep('error');
-
       setAlertConfig({
-        title:
-          '⚠️ Слишком быстро',
-        message:
-          'Подождите перед следующим сканированием',
+        title: '⚠️ Слишком быстро',
+        message: 'Подождите перед следующим сканированием',
         type: 'error',
       });
-
-      setShowCustomAlert(
-        true,
-      );
-
+      setShowCustomAlert(true);
       setCode('');
-
       inputRef.current?.focus();
-
       return;
     }
 
-    if (
-      requestQueue.length >=
-      MAX_QUEUE_SIZE
-    ) {
+    // Проверка размера очереди
+    if (requestQueue.length >= MAX_QUEUE_SIZE) {
       playBeep('error');
-
       setAlertConfig({
-        title:
-          '⚠️ Переполнение',
-        message:
-          'Очередь переполнена. Дождитесь обработки',
+        title: '⚠️ Переполнение',
+        message: 'Очередь переполнена. Дождитесь обработки',
         type: 'error',
       });
-
-      setShowCustomAlert(
-        true,
-      );
-
+      setShowCustomAlert(true);
       setCode('');
-
       inputRef.current?.focus();
-
       return;
     }
 
-    setRequestQueue(
-      prev => [
-        ...prev,
-        trimmedCode,
-      ],
-    );
-
+    // Добавляем в очередь
+    setRequestQueue(prev => [...prev, trimmedCode]);
     setCanScan(false);
-
+    // Очищаем поле для следующего скана
     setCode('');
-
     inputRef.current?.focus();
-
     setTimeout(() => {
       setCanScan(true);
       inputRef.current?.focus();
     }, SCAN_DELAY);
-
+    // Короткий сигнал подтверждения сканирования
     playBeep('success');
   };
 
-  const handleKeyPress = (
-    event: any,
-  ) => {
-    if (
-      event.nativeEvent.key ===
-      'Enter'
-    ) {
+  // Обработка нажатия Enter
+  const handleKeyPress = (event: any) => {
+    if (event.nativeEvent.key === 'Enter') {
       handleSubmit();
     }
   };
 
+  // Обработчик закрытия кастомного алерта
   const handleAlertClose = () => {
     setShowCustomAlert(false);
-    inputRef.current?.focus();
   };
 
+  // Вычисление процента заполнения коробки
   const getFillPercentage = (): number => {
-    if (!boxInfo) {
-      return 0;
-    }
-
-    if (
-      boxInfo.limitProductsInBox <= 0
-    ) {
-      return 0;
-    }
-
-    return (
-      (boxInfo.productsInBox /
-        boxInfo.limitProductsInBox) *
-      100
-    );
+    if (!boxInfo) return 0;
+    return (boxInfo.productsInBox / boxInfo.limitProductsInBox) * 100;
   };
 
+  // Получение цвета и иконки для статуса сервера
   const getServerStatusIcon = () => {
     switch (serverStatus) {
       case 'online':
         return '🟢';
-
       case 'offline':
         return '🔴';
-
       case 'checking':
         return '🟡';
-
       default:
         return '⚪';
     }
   };
 
+  // Отображение статуса очереди (используем существующие стили)
   const renderQueueStatus = () => {
-    if (
-      requestQueue.length === 0
-    ) {
-      return null;
+    if (requestQueue.length > 0) {
+      return (
+        <View style={styles.infoContainer}>
+          {/* eslint-disable-next-line react-native/no-inline-styles */}
+          <Text style={[styles.modalOperatorTitle, { color: '#FF9800' }]}>
+            📦 В очереди: {requestQueue.length}
+          </Text>
+        </View>
+      );
     }
-
-    return (
-      <View
-        style={
-          styles.infoContainer
-        }
-      >
-        <Text
-          style={[
-            styles.modalOperatorTitle,
-            {
-              color: '#FF9800',
-            },
-          ]}
-        >
-          📦 В очереди:{' '}
-          {requestQueue.length}
-        </Text>
-      </View>
-    );
+    return null;
   };
 
   return (
@@ -492,175 +289,77 @@ export const ManualWorkModal: React.FC<
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={
-          Platform.OS === 'ios'
-            ? 'padding'
-            : 'height'
-        }
-        style={
-          styles.modalContainer
-        }
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalContainer}
       >
-        <View
-          style={styles.modalHeader}
-        >
-          <View
-            style={styles.infoContainer}
-          >
+        {/* Информация об операторе и сервере */}
+        <View style={styles.modalHeader}>
+          <View style={styles.infoContainer}>
+            {/* <Text style={styles.modalOperatorTitle}>
+                            Оператор №{title}
+                        </Text> */}
             <TouchableOpacity
               onPress={pingServer}
-              style={
-                styles.serverInfoButton
-              }
-              disabled={
-                serverStatus ===
-                'checking'
-              }
+              style={styles.serverInfoButton}
+              disabled={serverStatus === 'checking'}
             >
               <Text
                 style={[
                   styles.serverInfoText,
-                  serverStatus ===
-                    'offline' &&
-                    styles.serverInfoTextOffline,
-                  serverStatus ===
-                    'online' &&
-                    styles.serverInfoTextOnline,
+                  serverStatus === 'offline' && styles.serverInfoTextOffline,
+                  serverStatus === 'online' && styles.serverInfoTextOnline,
                 ]}
               >
-                {getServerStatusIcon()}{' '}
-                Сервер: {serverUrl}
+                {getServerStatusIcon()} Сервер: {serverUrl}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View
-          style={styles.modalHeader}
-        >
-          <Text
-            style={styles.modalTitle}
-          >
-            Режим ручной работы
-          </Text>
-
-          <TouchableOpacity
-            onPress={onClose}
-            style={styles.closeButton}
-          >
-            <Text
-              style={
-                styles.closeButtonText
-              }
-            >
-              ✕
-            </Text>
+        {/* Заголовок модального окна */}
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Режим ручной работы</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
         </View>
 
-        <View
-          style={
-            styles.expectedScanContainer
-          }
-        >
-          <Text
-            style={
-              styles.expectedScanTitle
-            }
-          >
-            Следующее сканирование
+        {/* Ожидаемое сканирование */}
+        <View style={styles.expectedScanContainer}>
+          <Text style={styles.expectedScanTitle}>Следующее сканирование</Text>
+
+          <Text style={styles.expectedScanValue}>
+            {getExpectedScanLabel(expectedScan)}
           </Text>
 
-          <Text
-            style={
-              styles.expectedScanValue
-            }
-          >
-            {getExpectedScanLabel(
-              expectedScan,
-            )}
-          </Text>
-
-          {expectedScan && (
-            <Text
-              style={
-                styles.expectedScanType
-              }
-            >
-              {expectedScan}
-            </Text>
+          {__DEV__ && expectedScan && (
+            <Text style={styles.expectedScanType}>{expectedScan}</Text>
           )}
         </View>
 
+        {/* Статус очереди */}
         {renderQueueStatus()}
 
+        {/* Информация о коробке (вверху экрана) */}
         {boxInfo && (
-          <View
-            style={
-              styles.boxInfoContainer
-            }
-          >
-            <View
-              style={
-                styles.boxIconWrapper
-              }
-            >
-              <View
-                style={styles.boxIcon}
-              >
-                <Text
-                  style={
-                    styles.boxNumberText
-                  }
-                >
-                  {boxInfo.boxNumber}
-                </Text>
+          <View style={styles.boxInfoContainer}>
+            <View style={styles.boxIconWrapper}>
+              <View style={styles.boxIcon}>
+                <Text style={styles.boxNumberText}>{boxInfo.boxNumber}</Text>
               </View>
-
-              <Text
-                style={
-                  styles.palletInfo
-                }
-              >
-                Паллета{' '}
-                {boxInfo.palletNumber}
+              <Text style={styles.palletInfo}>
+                Паллета {boxInfo.palletNumber}
               </Text>
             </View>
 
-            <View
-              style={
-                styles.statusBarContainer
-              }
-            >
-              <View
-                style={
-                  styles.statusBarHeader
-                }
-              >
-                <Text
-                  style={
-                    styles.statusBarTitle
-                  }
-                >
-                  Заполнение коробки
-                </Text>
-
-                <Text
-                  style={
-                    styles.statusBarValue
-                  }
-                >
-                  {boxInfo.productsInBox}{' '}
-                  из{' '}
-                  {
-                    boxInfo.limitProductsInBox
-                  }
+            <View style={styles.statusBarContainer}>
+              <View style={styles.statusBarHeader}>
+                <Text style={styles.statusBarTitle}>Заполнение коробки</Text>
+                <Text style={styles.statusBarValue}>
+                  {boxInfo.productsInBox} из {boxInfo.limitProductsInBox}
                 </Text>
               </View>
-
-              <View
-                style={styles.statusBar}
-              >
+              <View style={styles.statusBar}>
                 <View
                   style={[
                     styles.statusBarFill,
@@ -674,66 +373,38 @@ export const ManualWorkModal: React.FC<
           </View>
         )}
 
-        <View
-          style={styles.inputWrapper}
-        >
+        {/* Поле ввода по центру оставшейся части экрана */}
+        <View style={styles.inputWrapper}>
           <TextInput
             ref={inputRef}
-            style={
-              styles.manualWorkInput
-            }
+            style={styles.manualWorkInput}
             value={code}
-            onChangeText={
-              setCode
-            }
-            onSubmitEditing={
-              handleSubmit
-            }
-            onKeyPress={
-              handleKeyPress
-            }
+            onChangeText={setCode}
+            onSubmitEditing={handleSubmit}
+            onKeyPress={handleKeyPress}
             placeholder={
               requestQueue.length > 0
                 ? `Очередь: ${requestQueue.length} | Введите код...`
-                : getExpectedScanLabel(
-                    expectedScan,
-                  )
+                : getExpectedScanLabel(expectedScan)
             }
             placeholderTextColor="#999"
             autoCapitalize="characters"
             autoCorrect={false}
-            autoFocus
+            autoFocus={true}
             returnKeyType="done"
-            blurOnSubmit={false}
-            editable={
-              requestQueue.length <
-              MAX_QUEUE_SIZE
-            }
+            submitBehavior="submit"
+            editable={requestQueue.length < MAX_QUEUE_SIZE}
           />
         </View>
 
+        {/* Кастомный алерт */}
         <CustomAlert
-          visible={
-            showCustomAlert
-          }
-          title={
-            alertConfig.title
-          }
-          message={
-            alertConfig.message
-          }
-          type={
-            alertConfig.type
-          }
-          onClose={
-            handleAlertClose
-          }
-          autoCloseTime={
-            alertConfig.type ===
-            'success'
-              ? 100
-              : undefined
-          }
+          visible={showCustomAlert}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          type={alertConfig.type}
+          onClose={handleAlertClose}
+          autoCloseTime={alertConfig.type === 'success' ? 100 : undefined}
         />
       </KeyboardAvoidingView>
     </Modal>

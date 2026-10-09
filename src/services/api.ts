@@ -234,11 +234,6 @@ export class ApiService {
 
       const responseText = await response.text();
 
-      console.log(`Ответ агрегации: ${responseText}`);
-
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('Сервер вернул пустой ответ');
-      }
 
       let responseData: any;
 
@@ -253,13 +248,6 @@ export class ApiService {
           responseData?.message ||
           responseData?.error ||
           `Ошибка HTTP: ${response.status}`;
-
-        Alert.alert(
-          'Ошибка',
-          Array.isArray(message)
-            ? message.join('\n')
-            : String(message),
-        );
 
         return {
           success: false,
@@ -289,8 +277,6 @@ export class ApiService {
         error instanceof Error
           ? error.message
           : 'Ошибка: попробуйте ещё раз.';
-
-      Alert.alert('Ошибка', message);
 
       return {
         success: false,
