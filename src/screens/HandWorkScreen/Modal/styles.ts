@@ -20,7 +20,7 @@ export const styles = StyleSheet.create({
   modalOperatorTitle: {
     fontSize: 18,
     color: '#000000',
-    marginLeft: 50
+    marginLeft: 50,
   },
   infoContainer: {
     flex: 1,
@@ -126,54 +126,51 @@ export const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
     borderRadius: 4,
   },
-  // Поле ввода (по центру)
-  inputWrapper: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  contentArea: {
+    paddingTop: 16,
     paddingHorizontal: 20,
-    marginTop: -50, // Немного смещаем вверх для лучшего центрирования
   },
+
+  expectedScanContainer: {
+    marginBottom: 12,
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#dddddd',
+    borderRadius: 12,
+  },
+
+  expectedScanTitle: {
+    marginBottom: 6,
+    fontSize: 14,
+    color: '#666666',
+  },
+
+  expectedScanValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#222222',
+  },
+
+  inputWrapper: {
+    marginTop: 50,
+    marginBottom: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+
   manualWorkInput: {
     width: '100%',
-    height: 48, // Уменьшил высоту
+    height: 48,
     borderWidth: 2,
     borderColor: '#ddd',
     borderRadius: 10,
     paddingHorizontal: 16,
-    fontSize: 18, // Уменьшил размер шрифта
+    fontSize: 18,
     backgroundColor: '#fff',
     color: '#333',
     fontWeight: '500',
     textAlign: 'center',
-    letterSpacing: 1, // Уменьшил межбуквенный интервал
+    letterSpacing: 1,
   },
-
-expectedScanContainer: {
-  marginHorizontal: 20,
-  marginBottom: 16,
-  padding: 16,
-  backgroundColor: '#f5f5f5',
-  borderWidth: 1,
-  borderColor: '#dddddd',
-  borderRadius: 12,
-},
-
-expectedScanTitle: {
-  marginBottom: 6,
-  fontSize: 14,
-  color: '#666666',
-},
-
-expectedScanValue: {
-  fontSize: 20,
-  fontWeight: '600',
-  color: '#222222',
-},
-
-expectedScanType: {
-  marginTop: 6,
-  fontSize: 13,
-  color: '#888888',
-},
 });

@@ -1,551 +1,814 @@
-// src/components/ActionsModal.tsx
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Modal,
-  View,
+  ScrollView,
+  StyleSheet,
+  TextInput,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  FlatList,
+  View,
 } from 'react-native';
 import { ApiService } from '../../services/api.ts';
 
-interface ActionsModalProps {
+export type AggregationScanType =
+  | 'PRODUCT'
+  | 'SMALL_BOX_LABEL'
+  | 'BIG_BOX_LABEL'
+  | 'PALLET_LABEL';
+
+export type AggregationInfo = {
+  scanType: AggregationScanType;
+  label: string | null;
+  parents: {
+    smallBox: string | null;
+    bigBox: string | null;
+    pallet: string | null;
+  };
+  contentsCount: number | null;
+  contentsType: AggregationScanType | null;
+  aggregationLvl: number;
+};
+
+type ActionTarget = {
+  scanType: AggregationScanType;
+  code: string;
+  isCurrent: boolean;
+};
+
+type Props = {
   visible: boolean;
+  scanResult: AggregationInfo;
   onClose: () => void;
-  searchData: {
-    type: 'code' | 'box' | 'pallet';
-    boxNumber?: number;
-    palletNumber?: number;
-    boxLabel?: string | null;
-    palletLabel?: string | null;
-    id?: number;
-    code?: string;
-    countIn?: number;
+  onDeleteSuccess: () => void;
+  onRefresh: (updated: AggregationInfo) => void;
+};
+
+const scanTypeNames: Record<AggregationScanType, string> = {
+  PRODUCT: 'товар',
+  SMALL_BOX_LABEL: 'малая коробка',
+  BIG_BOX_LABEL: 'Коробка',
+  PALLET_LABEL: 'паллета',
+};
+
+/**
+ * Получает номер контейнера из полной этикетки.
+ * Пример: 00746600413500000018 -> 1.
+ */
+const extractContainerNumber = (
+  sscc: string | null | undefined,
+): string | null => {
+  if (sscc == null || sscc.trim() === '') {
+    return null;
+  }
+
+  const serialReference = sscc.substring(12, 19);
+  return serialReference.replace(/^0+/, '') || '0';
+};
+
+/**
+ * Все этикетки приходят с бэкенда.
+ * Текущий объект использует label,
+ * родительские упаковки — parents.
+ */
+const getActionTargets = (scanResult: AggregationInfo): ActionTarget[] => {
+  const targets: ActionTarget[] = [
+    {
+      scanType: scanResult.scanType,
+      code: scanResult.label?.trim() ?? '',
+      isCurrent: true,
+    },
+  ];
+
+  const { smallBox, bigBox, pallet } = scanResult.parents ?? {
+    smallBox: null,
+    bigBox: null,
+    pallet: null,
   };
-  onDeleteSuccess?: () => void;
-}
 
-interface Pallet {
-  pallet_number: number;
-  box_count: string | number;
-}
+  if (smallBox?.trim()) {
+    targets.push({
+      scanType: 'SMALL_BOX_LABEL',
+      code: smallBox.trim(),
+      isCurrent: false,
+    });
+  }
 
-export const ActionsModal: React.FC<ActionsModalProps> = ({
+  if (bigBox?.trim()) {
+    targets.push({
+      scanType: 'BIG_BOX_LABEL',
+      code: bigBox.trim(),
+      isCurrent: false,
+    });
+  }
+
+  if (pallet?.trim()) {
+    targets.push({
+      scanType: 'PALLET_LABEL',
+      code: pallet.trim(),
+      isCurrent: false,
+    });
+  }
+
+  return targets;
+};
+
+const getActionTargetName = (target: ActionTarget): string => {
+  if (target.scanType === 'PRODUCT') {
+    return `Товар`
+  }
+
+  const number = extractContainerNumber(target.code);
+
+  return number !== null
+    ? `${scanTypeNames[target.scanType]} №${number}`
+    : `${scanTypeNames[target.scanType]} — этикетка не получена`;
+};
+
+export const SearchActionsModal = ({
   visible,
+  scanResult,
   onClose,
-  searchData,
   onDeleteSuccess,
-}) => {
+  onRefresh,
+}: Props) => {
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isRemovingFromPallet, setIsRemovingFromPallet] = useState(false);
-  const [isDeletingPallet, setIsDeletingPallet] = useState(false);
-  const [isMoving, setIsMoving] = useState(false);
-  const [pallets, setPallets] = useState<Pallet[]>([]);
-  const [selectedPallet, setSelectedPallet] = useState<Pallet | null>(null);
-  const [showPalletSelect, setShowPalletSelect] = useState(false);
+  const [printingType, setPrintingType] = useState<AggregationScanType | null>(
+    null,
+  );
+  const [printingCode, setPrintingCode] = useState<string | null>(null);
 
-  const handleTransfer = async () => {
-    if (!selectedPallet || !searchData.boxNumber) {
-      Alert.alert('Ошибка', 'Выберите паллету для перемещения');
-      return;
-    }
+  const [contentCode, setContentCode] = useState('');
+  const [isAddingContent, setIsAddingContent] = useState(false);
 
-    setIsMoving(true);
-    try {
-      const res = await ApiService.moveBoxToPallet(
-        searchData.boxNumber,
-        selectedPallet.pallet_number,
-      );
+  const [addingToPackageCode, setAddingToPackageCode] = useState<string | null>(
+    null,
+  );
 
-      if (res) {
-        setShowPalletSelect(false);
-        setSelectedPallet(null);
-        Alert.alert('✅ Успешно', 'Коробка успешно перемещена');
-        if (onDeleteSuccess) {
-          onDeleteSuccess();
-        }
-        onClose();
-      } else {
-        Alert.alert('❌ Ошибка', 'Не удалось переместить коробку');
-      }
-    } catch (error) {
-      console.error('Ошибка перемещения:', error);
-      Alert.alert('❌ Ошибка', 'Не удалось переместить коробку');
-    } finally {
-      setIsMoving(false);
-    }
-  };
+  const [palletCode, setPalletCode] = useState('');
+  const [movingBoxCode, setMovingBoxCode] = useState<string | null>(null);
+  const [isMovingBox, setIsMovingBox] = useState(false);
 
-  const loadPallets = async () => {
-    try {
-      const res = await ApiService.getAllPallets();
-      if (res && res.data && res.data.length > 0) {
-        // Фильтруем текущую паллету
-        const filteredPallets = res.data.filter(
-          (p: Pallet) => p.pallet_number !== searchData.palletNumber,
-        );
-        setPallets(filteredPallets);
-        setShowPalletSelect(true);
-      } else {
-        Alert.alert('Информация', 'Нет доступных паллет для перемещения');
-      }
-    } catch (error) {
-      console.error('Ошибка загрузки паллет:', error);
-      Alert.alert('Ошибка', 'Не удалось загрузить список паллет');
-    }
-  };
+  // Полная этикетка текущего объекта, полученная с бэкенда.
+  const currentObjectCode = scanResult.label?.trim() ?? '';
 
-  const confirmDeleteBox = () => {
-    Alert.alert(
-      'Удаление коробки',
-      `Вы уверены, что хотите удалить коробку №${searchData.boxNumber}?`,
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Удалить',
-          style: 'destructive',
-          onPress: () => handleDeleteBox(),
-        },
-      ],
-    );
-  };
+  const actionTargets = getActionTargets(scanResult);
 
-  const confirmDeletePallet = () => {
-    Alert.alert(
-      'Удаление паллеты',
-      `Вы уверены, что хотите удалить паллету №${searchData.palletNumber}?\n\nВНИМАНИЕ: Все коробки с кодами удалятся`,
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Удалить',
-          style: 'destructive',
-          onPress: () => handleDeletePallet(),
-        },
-      ],
-    );
-  };
-
-  const confirmRemoveBoxFromPallet = () => {
-    Alert.alert(
-      'Изъятие коробки',
-      `Вы уверены, что хотите изъять коробку №${searchData.boxNumber} из паллеты №${searchData.palletNumber}?`,
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Изъять',
-          style: 'destructive',
-          onPress: () => handleRemoveBoxFromPallet(),
-        },
-      ],
-    );
-  };
-
-  const handleDeleteBox = async () => {
-    if (!searchData.boxNumber) {
-      Alert.alert('Ошибка', 'Номер коробки не указан');
+  const deleteActionTarget = async (target: ActionTarget) => {
+    if (!target.code) {
+      Alert.alert('Ошибка удаления', 'Бэкенд не вернул этикетку объекта.');
       return;
     }
 
     setIsDeleting(true);
+
     try {
-      const result = await ApiService.deleteBox(searchData.boxNumber);
-      if (result.success) {
-        onClose();
-        if (onDeleteSuccess) {
-          onDeleteSuccess();
-        }
-        Alert.alert('✅ Успешно', result.message);
-      } else {
-        Alert.alert(
-          '❌ Ошибка',
-          result.message || 'Не удалось удалить коробку',
-        );
+      const response =
+        target.scanType === 'PRODUCT'
+          ? await ApiService.deleteCode(target.code)
+          : await ApiService.deletePackage(target.code);
+
+      if (response?.success === false) {
+        throw new Error(response.message || 'Сервер отклонил удаление');
       }
+
+      Alert.alert(
+        'Удалено',
+        `Удаление: ${getActionTargetName(target)} выполнено`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              onClose();
+              onDeleteSuccess();
+            },
+          },
+        ],
+      );
     } catch (error) {
-      console.error('Ошибка удаления коробки:', error);
-      Alert.alert('❌ Ошибка', 'Не удалось удалить коробку');
+      Alert.alert(
+        'Ошибка удаления',
+        error instanceof Error ? error.message : 'Не удалось удалить объект',
+      );
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const handleDeletePallet = async () => {
-    if (!searchData.palletNumber) {
-      Alert.alert('Ошибка', 'Номер паллеты не указан');
+  const confirmDelete = (target: ActionTarget) => {
+    if (!target.code) {
+      Alert.alert('Ошибка удаления', 'Бэкенд не вернул этикетку объекта.');
       return;
     }
 
-    setIsDeletingPallet(true);
-    try {
-      const result = await ApiService.deletePallet(searchData.palletNumber);
-      if (result.success) {
-        onClose();
-        if (onDeleteSuccess) {
-          onDeleteSuccess();
+    const targetName = getActionTargetName(target);
+
+    Alert.alert('Подтверждение 1 из 2', `Удалить ${targetName}?`, [
+      {
+        text: 'Отмена',
+        style: 'cancel',
+      },
+      {
+        text: 'Продолжить',
+        onPress: () => {
+          Alert.alert(
+            'Подтверждение 2 из 2',
+            `Удаляются все коды из этой коробки. Удалить ${targetName}?`,
+            [
+              {
+                text: 'Отмена',
+                style: 'cancel',
+              },
+              {
+                text: 'Удалить окончательно',
+                style: 'destructive',
+                onPress: () => void deleteActionTarget(target),
+              },
+            ],
+          );
+        },
+      },
+    ]);
+  };
+
+  const moveBigBoxToPallet = async (boxCode: string) => {
+    const targetPalletCode = palletCode.trim();
+
+    if (!boxCode || !targetPalletCode || isMovingBox) {
+      return;
+    }
+
+    setIsMovingBox(true);
+
+    await ApiService.moveBox(boxCode, targetPalletCode);
+
+
+      setPalletCode('');
+      setMovingBoxCode(null);
+
+      // Обновляем текущий объект вместе с его родителями.
+      if (currentObjectCode) {
+        const refreshed = await ApiService.searchInfo(currentObjectCode);
+
+        if (refreshed?.success !== false && refreshed?.scanType) {
+          onRefresh(refreshed as AggregationInfo);
         }
-        Alert.alert('✅ Успешно', result.message);
-      } else {
-        Alert.alert(
-          '❌ Ошибка',
-          result.message || 'Не удалось удалить паллету',
+      }
+      setIsMovingBox(false);
+  };
+
+  const addProductToPackage = async (packageCode: string) => {
+    const productCode = contentCode.trim();
+    const targetPackageCode = packageCode.trim();
+
+    if (
+      !productCode ||
+      !targetPackageCode ||
+      isAddingContent ||
+      isDeleting ||
+      printingType !== null
+    ) {
+      return;
+    }
+
+    setIsAddingContent(true);
+
+    try {
+      const response = await ApiService.addCodeToBox(
+        targetPackageCode,
+        productCode,
+      );
+
+      if (response?.success === false) {
+        throw new Error(
+          response.message || 'Не удалось добавить товар в упаковку',
         );
       }
+
+      setContentCode('');
+      setAddingToPackageCode(null);
+
+      if (currentObjectCode) {
+        const refreshed = await ApiService.searchInfo(currentObjectCode);
+
+        if (refreshed?.success !== false && refreshed?.scanType) {
+          onRefresh(refreshed as AggregationInfo);
+        }
+      }
+
+      Alert.alert('Готово', response?.message || 'Товар добавлен в упаковку');
     } catch (error) {
-      console.error('Ошибка удаления паллеты:', error);
-      Alert.alert('❌ Ошибка', 'Не удалось удалить паллету');
+      Alert.alert(
+        'Ошибка добавления',
+        error instanceof Error
+          ? error.message
+          : 'Не удалось добавить товар в упаковку',
+      );
     } finally {
-      setIsDeletingPallet(false);
+      setIsAddingContent(false);
     }
   };
 
-  const handleRemoveBoxFromPallet = async () => {
-    if (!searchData.boxNumber) {
-      Alert.alert('Ошибка', 'Номер коробки не указан');
+  const printTarget = async (target: ActionTarget) => {
+    if (target.scanType === 'PRODUCT') {
       return;
     }
 
-    setIsRemovingFromPallet(true);
+    const containerNumber = extractContainerNumber(target.code);
+    const packageNumber =
+      containerNumber === null ? NaN : Number(containerNumber);
+
+    if (!Number.isInteger(packageNumber) || packageNumber <= 0) {
+      Alert.alert(
+        'Ошибка печати',
+        `Не удалось извлечь номер из этикетки:\n${target.code}`,
+      );
+      return;
+    }
+
+    setPrintingType(target.scanType);
+    setPrintingCode(target.code);
+
     try {
-      const result = await ApiService.removeBoxFromPallet(searchData.boxNumber);
-      if (result.success) {
-        onClose();
-        if (onDeleteSuccess) {
-          onDeleteSuccess();
-        }
-        Alert.alert('✅ Успешно', result.message);
-      } else {
-        Alert.alert('❌ Ошибка', result.message || 'Не удалось изъять коробку');
+      const taskId = await ApiService.getActiveTask();
+      let response: Response;
+
+      switch (target.scanType) {
+        case 'SMALL_BOX_LABEL':
+          response = await ApiService.PrintSmallBox(packageNumber, taskId);
+          break;
+
+        case 'BIG_BOX_LABEL':
+          response = await ApiService.PrintBox(packageNumber, taskId);
+          break;
+
+        case 'PALLET_LABEL':
+          response = await ApiService.PrintPallet(packageNumber, taskId);
+          break;
+
+        default:
+          throw new Error('Неизвестный тип упаковки');
       }
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        throw new Error(responseText || `Ошибка HTTP: ${response.status}`);
+      }
+
+      Alert.alert(
+        'Готово',
+        `Этикетка отправлена на печать:\n${getActionTargetName(target)}`,
+      );
     } catch (error) {
-      console.error('Ошибка изъятия коробки:', error);
-      Alert.alert('❌ Ошибка', 'Не удалось изъять коробку');
+      Alert.alert(
+        'Ошибка печати',
+        error instanceof Error
+          ? error.message
+          : 'Не удалось напечатать этикетку',
+      );
     } finally {
-      setIsRemovingFromPallet(false);
+      setPrintingType(null);
+      setPrintingCode(null);
     }
   };
 
-  const isBox = searchData.type === 'box';
-  const isPallet = searchData.type === 'pallet';
+  const renderActionBlock = (target: ActionTarget) => {
+    const isPackage = target.scanType !== 'PRODUCT';
+    const isPrintingThisTarget = printingCode === target.code;
+    const targetName = getActionTargetName(target);
+
+    const canAddProductToTarget =
+      Boolean(target.code) &&
+      ((scanResult.aggregationLvl === 3 &&
+        target.scanType === 'SMALL_BOX_LABEL') ||
+        (scanResult.aggregationLvl === 2 &&
+          target.scanType === 'BIG_BOX_LABEL'));
+
+    const isAddingToThisPackage = addingToPackageCode === target.code;
+
+    const canMoveBigBox =
+      target.scanType === 'BIG_BOX_LABEL' && Boolean(target.code);
+
+    const isMovingThisBox = movingBoxCode === target.code;
+
+    return (
+      <View
+        key={`${target.scanType}-${target.code}-${
+          target.isCurrent ? 'current' : 'parent'
+        }`}
+        style={styles.entityBlock}
+      >
+        <Text style={styles.entityName}>{targetName}</Text>
+
+        <View style={styles.entityActions}>
+          {isPackage && (
+            <TouchableOpacity
+              style={[
+                styles.secondaryButton,
+                (printingType !== null ||
+                  isDeleting ||
+                  isAddingContent ||
+                  !target.code) &&
+                  styles.disabledButton,
+              ]}
+              onPress={() => void printTarget(target)}
+              disabled={
+                printingType !== null ||
+                isDeleting ||
+                isAddingContent ||
+                !target.code
+              }
+            >
+              {isPrintingThisTarget ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Печать</Text>
+              )}
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.dangerButton,
+              (isDeleting ||
+                printingType !== null ||
+                isAddingContent ||
+                !target.code) &&
+                styles.disabledButton,
+            ]}
+            onPress={() => confirmDelete(target)}
+            disabled={
+              isDeleting ||
+              printingType !== null ||
+              isAddingContent ||
+              !target.code
+            }
+          >
+            {isDeleting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>
+                {target.scanType === 'PRODUCT' ? 'Удалить товар' : 'Удалить'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {canAddProductToTarget && (
+          <View style={styles.addSection}>
+            <Text style={styles.sectionTitle}>
+              Добавить продукт в{' '}
+              {scanResult.aggregationLvl === 3 ? 'малую коробку' : 'коробку'}
+            </Text>
+
+            {!isAddingToThisPackage ? (
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (isAddingContent || isDeleting || printingType !== null) &&
+                    styles.disabledButton,
+                ]}
+                onPress={() => {
+                  setContentCode('');
+                  setAddingToPackageCode(target.code);
+                }}
+                disabled={
+                  isAddingContent || isDeleting || printingType !== null
+                }
+              >
+                <Text style={styles.buttonText}>Добавить продукт</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TextInput
+                  style={styles.addInput}
+                  value={contentCode}
+                  onChangeText={setContentCode}
+                  placeholder="Отсканируйте код товара"
+                  placeholderTextColor="#999"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => void addProductToPackage(target.code)}
+                  editable={
+                    !isAddingContent && !isDeleting && printingType === null
+                  }
+                  autoFocus
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    (!contentCode.trim() ||
+                      isAddingContent ||
+                      isDeleting ||
+                      printingType !== null) &&
+                      styles.disabledButton,
+                  ]}
+                  onPress={() => void addProductToPackage(target.code)}
+                  disabled={
+                    !contentCode.trim() ||
+                    isAddingContent ||
+                    isDeleting ||
+                    printingType !== null
+                  }
+                >
+                  {isAddingContent ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>
+                      Подтвердить добавление
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setContentCode('');
+                    setAddingToPackageCode(null);
+                  }}
+                  disabled={isAddingContent}
+                >
+                  <Text style={styles.buttonText}>Отмена</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
+        {canMoveBigBox && (
+          <View style={styles.addSection}>
+            <Text style={styles.sectionTitle}>Перемещение большой коробки</Text>
+
+            {!isMovingThisBox ? (
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (isMovingBox ||
+                    isAddingContent ||
+                    isDeleting ||
+                    printingType !== null) &&
+                    styles.disabledButton,
+                ]}
+                onPress={() => {
+                  setPalletCode('');
+                  setMovingBoxCode(target.code);
+                }}
+                disabled={
+                  isMovingBox ||
+                  isAddingContent ||
+                  isDeleting ||
+                  printingType !== null
+                }
+              >
+                <Text style={styles.buttonText}>Переместить на паллету</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TextInput
+                  style={styles.addInput}
+                  value={palletCode}
+                  onChangeText={setPalletCode}
+                  placeholder="Отсканируйте этикетку паллеты"
+                  placeholderTextColor="#999"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void moveBigBoxToPallet(target.code)}
+                  editable={!isMovingBox}
+                  autoFocus
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    (!palletCode.trim() || isMovingBox) &&
+                      styles.disabledButton,
+                  ]}
+                  onPress={() => void moveBigBoxToPallet(target.code)}
+                  disabled={!palletCode.trim() || isMovingBox}
+                >
+                  {isMovingBox ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>
+                      Подтвердить перемещение
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setPalletCode('');
+                    setMovingBoxCode(null);
+                  }}
+                  disabled={isMovingBox}
+                >
+                  <Text style={styles.buttonText}>Отмена</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <Modal
       visible={visible}
-      transparent
-      animationType="fade"
+      transparent={false}
+      animationType="slide"
+      presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
-      {!showPalletSelect ? (
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={onClose}
-        >
-          <View
-            style={styles.modalContent}
-            onStartShouldSetResponder={() => true}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {isBox ? 'Действия с коробкой' : 'Действия с паллетой'}
-              </Text>
-              <Text style={styles.modalSubtitle}>
-                {isBox
-                  ? `Коробка: ${searchData.boxNumber}`
-                  : `Паллета: ${searchData.palletNumber}`}
-              </Text>
-              {isBox && searchData.palletNumber && (
-                <Text style={styles.modalSubtitle}>
-                  Паллета: {searchData.palletNumber}
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.actionsContainer}>
-              {/* Действия с коробкой */}
-              {isBox && (
-                <>
-                  <TouchableOpacity
-                    style={styles.moveButton}
-                    onPress={loadPallets}
-                    disabled={isDeleting}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      Переместить коробку
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.dangerButton}
-                    onPress={confirmDeleteBox}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? (
-                      <ActivityIndicator size="small" color="white" />
-                    ) : (
-                      <Text style={styles.actionButtonText}>
-                        🗑Удалить коробку
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {/* Действия с паллетой */}
-              {isPallet && (
-                <TouchableOpacity
-                  style={styles.dangerButton}
-                  onPress={confirmDeletePallet}
-                  disabled={isDeletingPallet}
-                >
-                  {isDeletingPallet ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <Text style={styles.actionButtonText}>
-                      Удалить паллету
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={onClose}
-              disabled={isDeleting || isRemovingFromPallet || isDeletingPallet}
-            >
-              <Text style={styles.cancelButtonText}>Отмена</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      ) : (
-        // Экран выбора паллеты для перемещения
-        <View style={styles.palletSelectContainer}>
-          <View style={styles.palletSelectHeader}>
-            <Text style={styles.palletSelectTitle}>
-              Выберите паллету для перемещения
-            </Text>
-            <Text style={styles.palletSelectSubtitle}>
-              Коробка №{searchData.boxNumber}
-            </Text>
+      <View style={styles.modal}>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Действия</Text>
           </View>
 
-          <FlatList
-            data={pallets}
-            keyExtractor={item => item.pallet_number.toString()}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.palletItem,
-                  selectedPallet?.pallet_number === item.pallet_number &&
-                    styles.palletItemSelected,
-                ]}
-                onPress={() => setSelectedPallet(item)}
-              >
-                <View style={styles.palletItemContent}>
-                  <Text style={styles.palletItemTitle}>
-                    Паллета №{item.pallet_number}
-                  </Text>
-                  <Text style={styles.palletItemSubtitle}>
-                    Коробок: {item.box_count}
-                  </Text>
-                </View>
-                {selectedPallet?.pallet_number === item.pallet_number && (
-                  <View style={styles.checkmark}>
-                    <Text style={styles.checkmarkText}>✓</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            )}
-            contentContainerStyle={styles.palletList}
-          />
-
           <TouchableOpacity
-            style={[
-              styles.confirmButton,
-              !selectedPallet && styles.confirmButtonDisabled,
-            ]}
-            onPress={handleTransfer}
-            disabled={!selectedPallet || isMoving}
+            style={styles.headerCloseButton}
+            onPress={onClose}
+            disabled={isDeleting || isAddingContent || printingType !== null}
           >
-            {isMoving ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text style={styles.actionButtonText}>Переместить коробку</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.cancelTransferButton}
-            onPress={() => {
-              setShowPalletSelect(false);
-              setSelectedPallet(null);
-            }}
-          >
-            <Text style={styles.cancelButtonText}>Отменить</Text>
+            <Text style={styles.headerCloseText}>✕</Text>
           </TouchableOpacity>
         </View>
-      )}
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.actions}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
+        >
+          <Text style={styles.sectionTitle}>Объекты и их действия</Text>
+
+          {actionTargets.map(renderActionBlock)}
+        </ScrollView>
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  modal: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    width: '100%',
+    backgroundColor: '#fff',
+    paddingTop: 12,
+    paddingHorizontal: 12,
+  },
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
   },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 10,
+  headerText: {
+    flex: 1,
+    paddingRight: 8,
   },
-  modalHeader: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  modalTitle: {
+  title: {
+    color: '#222',
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    fontWeight: '700',
+    marginTop: 'auto',
   },
-  modalSubtitle: {
-    fontSize: 16,
+  subtitle: {
     color: '#666',
-    marginBottom: 4,
+    fontSize: 13,
+    lineHeight: 17,
   },
-  actionsContainer: {
-    marginBottom: 20,
-  },
-  moveButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 10,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+  headerCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0f0f0',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
   },
-  dangerButton: {
-    backgroundColor: '#FF3B30',
-    borderRadius: 10,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  warningButton: {
-    backgroundColor: '#FF9500',
-    borderRadius: 10,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 16,
+  headerCloseText: {
+    color: '#333',
+    fontSize: 18,
     fontWeight: '600',
   },
-  cancelButton: {
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  cancelButtonText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  palletSelectContainer: {
+  scrollView: {
     flex: 1,
+    marginTop: 8,
+  },
+  actions: {
+    paddingBottom: 10,
+    flexGrow: 1,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#222',
+    marginBottom: 8,
+  },
+  addSection: {
     backgroundColor: '#f5f5f5',
-    padding: 16,
+    borderRadius: 9,
+    padding: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
-  palletSelectHeader: {
-    paddingTop: 40,
-    paddingBottom: 20,
-    alignItems: 'center',
-  },
-  palletSelectTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  palletSelectSubtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-  palletList: {
-    paddingBottom: 20,
-  },
-  palletItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  palletItemSelected: {
-    borderColor: '#34C759',
-  },
-  palletItemContent: {
-    flex: 1,
-  },
-  palletItemTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  palletItemSubtitle: {
+  addInput: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     fontSize: 14,
-    color: '#666',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    color: '#333',
   },
-  checkmark: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#34C759',
+  entityBlock: {
+    backgroundColor: '#fff',
+    borderRadius: 9,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#dedede',
+  },
+  entityName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#222',
+    marginBottom: 6,
+  },
+  entityActions: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  primaryButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
+    marginTop: 2,
+    marginBottom: 0,
+    marginRight: 8,
   },
-  checkmarkText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  confirmButton: {
-    backgroundColor: '#34C759',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  confirmButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  cancelTransferButton: {
+  dangerButton: {
+    flex: 1,
     backgroundColor: '#FF3B30',
-    borderRadius: 12,
-    paddingVertical: 16,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  cancelButton: {
+    backgroundColor: '#8E8E93',
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  footer: {
+    paddingTop: 8,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e5e5',
+    backgroundColor: '#fff',
+  },
+  footerButton: {
+    backgroundColor: '#8E8E93',
+    borderRadius: 9,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  disabledButton: {
+    opacity: 0.55,
   },
 });

@@ -1,56 +1,105 @@
-// src/components/BurgerMenu/styles.ts
-import { StyleSheet, Dimensions, Platform } from 'react-native';
-
-const { width } = Dimensions.get('window');
+import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
   burgerButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 40 : 20,
-    right: 20,
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    zIndex: 10000,
+    justifyContent: 'center',
   },
+
   burgerIcon: {
-    fontSize: 24,
-    color: '#333',
-    fontWeight: 'bold',
+    fontSize: 27,
+    color: '#222',
   },
-  modalOverlay: {
+
+  overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-start',
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
   },
+  tsdId: {
+    marginLeft: 'auto',
+    fontSize: 14,
+    color: '#666',
+  },
+
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.18)',
+  },
+
   menuContainer: {
-    backgroundColor: 'white',
-    marginHorizontal: 20,
-    borderRadius: 12,
-    paddingVertical: 16,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  menuItem: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    position: 'absolute',
+    top: 56,
+    left: 0,
+    width: 270,
+    backgroundColor: '#fff',
+    borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
+    borderColor: '#e0e0e0',
+    borderBottomRightRadius: 10,
+    paddingVertical: 8,
+    elevation: 10,
   },
+
+  menuHeader: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    marginBottom: 4,
+  },
+
+  menuTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#222',
+  },
+
+  closeButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  closeButtonText: {
+    fontSize: 20,
+    color: '#666',
+  },
+
+  menuItem: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+
   menuItemText: {
-    fontSize: 16,
-    color: '#333',
+    fontSize: 15,
+    color: '#222',
+  },
+  screenHeader: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    zIndex: 2,
+    elevation: 2,
+  },
+
+  screenTitle: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#222',
   },
 });

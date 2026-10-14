@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -22,40 +23,92 @@ interface TaskSelectionScreenProps {
   onTaskSelected: (taskId: number) => void;
 }
 
-export const TaskSelectionScreen: React.FC<
-  TaskSelectionScreenProps
-> = ({ onTaskSelected }) => {
-  const [tasksInWork, setTasksInWork] =
-    useState<Task[]>([]);
+const parseTaskId = (value: unknown): number | null => {
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    return null;
+  }
 
-  const [unprocessedTasks, setUnprocessedTasks] =
-    useState<Task[]>([]);
+  if (typeof value === 'string' && !value.trim()) {
+    return null;
+  }
 
-  const [isLoading, setIsLoading] =
-    useState(true);
+  const id = Number(value);
 
-  const [startingTaskId, setStartingTaskId] =
-    useState<number | null>(null);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
 
-  const [error, setError] =
-    useState('');
+/**
+ * Поддерживает ответ в виде ID, объекта задания
+ * или объекта активной задачи с вложенным task.
+ */
+const extractActiveTaskId = (value: unknown): number | null => {
+  const primitiveId = parseTaskId(value);
 
-  useEffect(() => {
-    void loadTasks();
-  }, []);
+  if (primitiveId !== null) {
+    return primitiveId;
+  }
 
-  const loadTasks = async () => {
-    try {
+  if (value === null || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  // Сначала проверяем именно ID задания, а не ID записи активной задачи.
+  const directId = parseTaskId(record.taskId) ?? parseTaskId(record.task_id);
+
+  if (directId !== null) {
+    return directId;
+  }
+
+  for (const key of ['task', 'data', 'activeTask', 'active_task']) {
+    const nestedId = extractActiveTaskId(record[key]);
+
+    if (nestedId !== null) {
+      return nestedId;
+    }
+  }
+
+  return parseTaskId(record.id);
+};
+
+export const TaskSelectionScreen: React.FC<TaskSelectionScreenProps> = ({
+  onTaskSelected,
+}) => {
+  const [tasksInWork, setTasksInWork] = useState<Task[]>([]);
+  const [unprocessedTasks, setUnprocessedTasks] = useState<Task[]>([]);
+  const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [startingTaskId, setStartingTaskId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+
+  const loadTasks = useCallback(async (pullToRefresh = false) => {
+    if (pullToRefresh) {
+      setIsRefreshing(true);
+    } else {
       setIsLoading(true);
-      setError('');
+    }
 
-      const [
-        inWorkResponse,
-        unprocessedResponse,
-      ] = await Promise.all([
-        ApiService.getTaskInWorkForTsd(),
-        ApiService.getTaskUnprocessedForTsd(),
-      ]);
+    setError('');
+
+    try {
+      const activeTaskPromise = ApiService.getActiveTask().catch(
+        activeTaskError => {
+          console.warn(
+            'Не удалось определить активное задание:',
+            activeTaskError,
+          );
+          return null;
+        },
+      );
+
+      const [inWorkResponse, unprocessedResponse, activeTaskResponse] =
+        await Promise.all([
+          ApiService.getTaskInWorkForTsd(),
+          ApiService.getTaskUnprocessedForTsd(),
+          activeTaskPromise,
+        ]);
 
       setTasksInWork(
         Array.isArray(inWorkResponse)
@@ -68,126 +121,66 @@ export const TaskSelectionScreen: React.FC<
           ? unprocessedResponse
           : unprocessedResponse?.data || [],
       );
-    } catch (error) {
-      console.error(
-        'Ошибка загрузки заданий:',
-        error,
-      );
 
-      setError(
-        'Не удалось загрузить задания',
-      );
+      setActiveTaskId(extractActiveTaskId(activeTaskResponse));
+    } catch (loadError) {
+      console.error('Ошибка загрузки заданий:', loadError);
+      setError('Не удалось загрузить задания');
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadTasks();
+  }, [loadTasks]);
 
   const openTask = (taskId: number) => {
     onTaskSelected(taskId);
   };
 
-  const startTask = async (
-    taskId: number,
-  ) => {
+  const startTask = async (taskId: number) => {
     try {
       setStartingTaskId(taskId);
       setError('');
 
       await ApiService.startTask(taskId);
-
       openTask(taskId);
-    } catch (error) {
-      console.error(
-        'Ошибка запуска задания:',
-        error,
-      );
-
-      setError(
-        'Не удалось начать задание',
-      );
+    } catch (startError) {
+      console.error('Ошибка запуска задания:', startError);
+      setError('Не удалось начать задание');
     } finally {
       setStartingTaskId(null);
     }
   };
 
-  const renderTaskInfo = (
-    task: Task,
-  ) => {
-    return (
-      <>
-        <Text
-          style={
-            styles.taskSelectionTaskTitle
-          }
-        >
-          {task.name ||
-            `Задание #${task.id}`}
-        </Text>
+  const renderTaskInfo = (task: Task) => (
+    <>
+      {task.id === activeTaskId && (
+        <Text style={styles.taskSelectionCurrentTaskBadge}>ТЕКУЩЕЕ</Text>
+      )}
 
-        <Text
-          style={
-            styles.taskSelectionTaskInfo
-          }
-        >
-          ID: {task.id}
-        </Text>
+      <Text style={styles.taskSelectionTaskTitle}>
+        {task.name || `Задание #${task.id}`}
+      </Text>
 
-        {task.gtin && (
-          <Text
-            style={
-              styles.taskSelectionTaskInfo
-            }
-          >
-            GTIN: {task.gtin}
-          </Text>
-        )}
+      {task.gtin && (
+        <Text style={styles.taskSelectionTaskInfo}>GTIN: {task.gtin}</Text>
+      )}
 
-        {task.batch && (
-          <Text
-            style={
-              styles.taskSelectionTaskInfo
-            }
-          >
-            Партия: {task.batch}
-          </Text>
-        )}
-
-        {task.description && (
-          <Text
-            style={
-              styles.taskSelectionTaskDescription
-            }
-          >
-            {task.description}
-          </Text>
-        )}
-      </>
-    );
-  };
+      {task.batch && (
+        <Text style={styles.taskSelectionTaskInfo}>Партия: {task.batch}</Text>
+      )}
+    </>
+  );
 
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <View style={styles.screenHeader}>
-          <Text style={styles.screenTitle}>
-            Выбор задания
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.taskSelectionLoading
-          }
-        >
-          <ActivityIndicator
-            size="large"
-          />
-
-          <Text
-            style={
-              styles.taskSelectionLoadingText
-            }
-          >
+        <View style={styles.taskSelectionLoading}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.taskSelectionLoadingText}>
             Загрузка заданий...
           </Text>
         </View>
@@ -197,155 +190,107 @@ export const TaskSelectionScreen: React.FC<
 
   return (
     <View style={styles.container}>
-      <View style={styles.screenHeader}>
-        <Text style={styles.screenTitle}>
-          Выбор задания
-        </Text>
-      </View>
-
       <ScrollView
-        contentContainerStyle={
-          styles.taskSelectionContent
-        }
+        contentContainerStyle={styles.taskSelectionContent}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void loadTasks(true)}
+            colors={['#007AFF']}
+            tintColor="#007AFF"
+          />
+        }
       >
         {error !== '' && (
-          <View
-            style={
-              styles.taskSelectionError
-            }
-          >
-            <Text
-              style={
-                styles.taskSelectionErrorText
-              }
-            >
-              {error}
-            </Text>
+          <View style={styles.taskSelectionError}>
+            <Text style={styles.taskSelectionErrorText}>{error}</Text>
           </View>
         )}
 
         {tasksInWork.length > 0 && (
-          <View
-            style={
-              styles.taskSelectionSection
-            }
-          >
-            <Text
-              style={
-                styles.taskSelectionSectionTitle
-              }
-            >
+          <View style={styles.taskSelectionSection}>
+            <Text style={styles.taskSelectionSectionTitle}>
               Задания в работе
             </Text>
 
-            {tasksInWork.map((task) => (
-              <View
-                key={task.id}
-                style={
-                  styles.taskSelectionTaskCard
-                }
-              >
-                {renderTaskInfo(task)}
+            {tasksInWork.map(task => {
+              const isStarting = startingTaskId === task.id;
+              const isCurrentTask = task.id === activeTaskId;
 
-                <TouchableOpacity
-                  style={
-                    styles.taskSelectionContinueButton
-                  }
-                  onPress={() =>
-                    openTask(task.id)
-                  }
-                  activeOpacity={0.7}
+              return (
+                <View
+                  key={task.id}
+                  style={[
+                    styles.taskSelectionTaskCard,
+                    isCurrentTask && styles.taskSelectionCurrentTaskCard,
+                  ]}
                 >
-                  <Text
-                    style={
-                      styles.taskSelectionButtonText
-                    }
+                  {renderTaskInfo(task)}
+
+                  <TouchableOpacity
+                    style={styles.taskSelectionContinueButton}
+                    disabled={startingTaskId !== null}
+                    onPress={() => void startTask(task.id)}
+                    activeOpacity={0.7}
                   >
-                    Продолжить
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+                    {isStarting ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.taskSelectionButtonText}>
+                        Продолжить
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
         )}
 
-        <View
-          style={
-            styles.taskSelectionSection
-          }
-        >
-          <Text
-            style={
-              styles.taskSelectionSectionTitle
-            }
-          >
+        <View style={styles.taskSelectionSection}>
+          <Text style={styles.taskSelectionSectionTitle}>
             Доступные задания
           </Text>
 
-          {unprocessedTasks.length ===
-          0 ? (
-            <View
-              style={
-                styles.taskSelectionEmpty
-              }
-            >
-              <Text
-                style={
-                  styles.taskSelectionEmptyText
-                }
-              >
+          {unprocessedTasks.length === 0 ? (
+            <View style={styles.taskSelectionEmpty}>
+              <Text style={styles.taskSelectionEmptyText}>
                 Нет доступных заданий
               </Text>
             </View>
           ) : (
-            unprocessedTasks.map(
-              (task) => {
-                const isStarting =
-                  startingTaskId ===
-                  task.id;
+            unprocessedTasks.map(task => {
+              const isStarting = startingTaskId === task.id;
+              const isCurrentTask = task.id === activeTaskId;
 
-                return (
-                  <View
-                    key={task.id}
-                    style={
-                      styles.taskSelectionTaskCard
-                    }
+              return (
+                <View
+                  key={task.id}
+                  style={[
+                    styles.taskSelectionTaskCard,
+                    isCurrentTask && styles.taskSelectionCurrentTaskCard,
+                  ]}
+                >
+                  {renderTaskInfo(task)}
+
+                  <TouchableOpacity
+                    style={styles.taskSelectionStartButton}
+                    disabled={startingTaskId !== null}
+                    onPress={() => void startTask(task.id)}
+                    activeOpacity={0.7}
                   >
-                    {renderTaskInfo(task)}
-
-                    <TouchableOpacity
-                      style={
-                        styles.taskSelectionStartButton
-                      }
-                      disabled={
-                        isStarting
-                      }
-                      onPress={() =>
-                        startTask(
-                          task.id,
-                        )
-                      }
-                      activeOpacity={0.7}
-                    >
-                      {isStarting ? (
-                        <ActivityIndicator
-                          color="#ffffff"
-                        />
-                      ) : (
-                        <Text
-                          style={
-                            styles.taskSelectionButtonText
-                          }
-                        >
-                          Начать
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                );
-              },
-            )
+                    {isStarting ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.taskSelectionButtonText}>
+                        {isCurrentTask ? 'Продолжить' : 'Начать'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            })
           )}
         </View>
       </ScrollView>

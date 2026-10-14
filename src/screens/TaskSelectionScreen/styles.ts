@@ -1,99 +1,121 @@
 import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+
   taskSelectionContent: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 40,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
 
   taskSelectionSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
 
   taskSelectionSectionTitle: {
-    marginBottom: 12,
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333333',
+    marginBottom: 8,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#333',
   },
 
   taskSelectionTaskCard: {
-    padding: 20,
-    marginBottom: 12,
-    backgroundColor: '#ffffff',
+    padding: 12,
+    marginBottom: 8,
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    borderRadius: 12,
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+
+  taskSelectionCurrentTaskCard: {
+    backgroundColor: '#f0f9f1',
+    borderColor: '#4caf50',
+    borderWidth: 2,
+  },
+
+  taskSelectionCurrentTaskBadge: {
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    overflow: 'hidden',
+    borderRadius: 5,
+    backgroundColor: '#d9f0dd',
+    color: '#24783a',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
 
   taskSelectionTaskTitle: {
-    marginBottom: 8,
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333333',
+    marginBottom: 5,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
   },
 
   taskSelectionTaskInfo: {
-    marginBottom: 4,
-    fontSize: 15,
-    color: '#555555',
+    marginBottom: 2,
+    fontSize: 13,
+    color: '#555',
   },
 
   taskSelectionTaskDescription: {
-    marginTop: 8,
-    marginBottom: 16,
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#777777',
+    marginTop: 5,
+    marginBottom: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#777',
   },
 
   taskSelectionContinueButton: {
     alignItems: 'center',
-    marginTop: 16,
-    paddingVertical: 14,
+    marginTop: 8,
+    paddingVertical: 10,
     backgroundColor: '#007AFF',
-    borderRadius: 10,
+    borderRadius: 8,
   },
 
   taskSelectionStartButton: {
     alignItems: 'center',
-    marginTop: 16,
-    paddingVertical: 14,
+    marginTop: 8,
+    paddingVertical: 10,
     backgroundColor: '#007AFF',
-    borderRadius: 10,
+    borderRadius: 8,
   },
 
   taskSelectionButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
 
   taskSelectionEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 30,
+    paddingVertical: 22,
     backgroundColor: '#f8f9fa',
-    borderRadius: 12,
+    borderRadius: 10,
   },
 
   taskSelectionEmptyText: {
-    fontSize: 16,
-    color: '#777777',
+    fontSize: 14,
+    color: '#777',
   },
 
   taskSelectionError: {
-    padding: 14,
-    marginBottom: 20,
+    padding: 10,
+    marginBottom: 12,
     backgroundColor: '#f8d7da',
     borderWidth: 1,
     borderColor: '#f5c6cb',
@@ -102,7 +124,7 @@ export const styles = StyleSheet.create({
 
   taskSelectionErrorText: {
     textAlign: 'center',
-    fontSize: 15,
+    fontSize: 14,
     color: '#721c24',
   },
 
@@ -113,8 +135,8 @@ export const styles = StyleSheet.create({
   },
 
   taskSelectionLoadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666666',
+    marginTop: 10,
+    fontSize: 14,
+    color: '#666',
   },
 });

@@ -1,218 +1,45 @@
 // src/services/api.ts (полный файл)
 import { Config } from '../config';
-import { Alert, Platform } from 'react-native';
 
 export class ApiService {
-  // Вспомогательный метод для проверки ошибки таблицы
-  private static isTableNotExistsError(responseText: string): boolean {
-    return (
-      responseText.includes('Таблица') &&
-      (responseText.includes('не существует') ||
-        responseText.includes('does not exist'))
-    );
-  }
-
-  private static handleTableNotExistsError(): any {
-    return {
-      message: 'Фасовка не начата',
-      error: 'TABLE_NOT_EXISTS',
-    };
-  }
-
-  static async searchCode(query: string): Promise<any> {
-    try {
-      console.log(`Поиск: ${query} на ${Config.SERVER_URL}/code/search`);
-
-      const response = await fetch(`${Config.SERVER_URL}/code/search`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query }),
-      });
-
-      const responseText = await response.text();
-      console.log('Текст ответа поиска:', responseText);
-
-      if (this.isTableNotExistsError(responseText)) {
-        console.log('Обнаружена ошибка: таблица не существует');
-        return this.handleTableNotExistsError();
-      }
-
-      if (!response.ok) {
-        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
-      }
-
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('Сервер вернул пустой ответ');
-      }
-
-      return JSON.parse(responseText);
-    } catch (error) {
-      console.error('Ошибка поиска:', error);
-
-      if (error instanceof Error && this.isTableNotExistsError(error.message)) {
-        return this.handleTableNotExistsError();
-      }
-
-      return {
-        message: `Ошибка: ${
-          error instanceof Error ? error.message : 'Неизвестная ошибка'
-        }`,
-      };
-    }
-  }
-
-  static async searchByBoxNumber(boxNumber: any) {
+  static async searchInfo(code: string) {
     try {
       const response = await fetch(
-        `${Config.SERVER_URL}/code/searchByBoxNumber?boxNumber=${boxNumber}`,
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-
-        if (this.isTableNotExistsError(errorText)) {
-          console.log('Обнаружена ошибка: таблица не существует');
-          Alert.alert('Информация', 'Фасовка не начата');
-          return null;
-        }
-
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const text = await response.text();
-
-      if (!text || text.trim() === '') {
-        console.warn('Пустой ответ от сервера для boxNumber:', boxNumber);
-        return null;
-      }
-
-      return JSON.parse(text);
-    } catch (error) {
-      console.error('Ошибка в searchByBoxNumber:', error);
-      return null;
-    }
-  }
-
-  static async getAllPallets(page: number = 1, limit: number = 50) {
-    try {
-      const url = `${Config.SERVER_URL}/code/allPallets?page=${page}&limit=${limit}`;
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-
-        if (this.isTableNotExistsError(errorText)) {
-          console.log('Обнаружена ошибка: таблица не существует');
-          return { data: [], total: 0, message: 'Фасовка не начата' };
-        }
-
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Ошибка получения паллет:', error);
-      return { data: [], total: 0 };
-    }
-  }
-
-  static async getProductCountInPallet(palletNumber: number) {
-    try {
-      console.log(`Получение количества продуктов в паллете: ${palletNumber}`);
-
-      const response = await fetch(
-        `${Config.SERVER_URL}/code/pallets/${palletNumber}/product-count`,
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Ошибка HTTP: ${response.status}`);
-      }
-
-      const count = await response.json();
-      console.log('Количество продуктов:', count);
-
-      return {
-        success: true,
-        count: typeof count === 'number' ? count : 0,
-        message: 'Успешно получено количество продуктов',
-      };
-    } catch (error) {
-      console.error('Ошибка получения количества продуктов:', error);
-      return {
-        success: false,
-        count: 0,
-        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
-      };
-    }
-  }
-
-  static async PrintBox(boxNumber: any, countInBox: any) {
-    try {
-      const response = await fetch(`${Config.SERVER_URL}/printer/print-box`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ boxNumber, countInBox }),
-      });
-      return response;
-    } catch (error) {
-      console.error('Ошибка печати коробки:', error);
-      throw error;
-    }
-  }
-
-  static async PrintPallet(
-    palletNumber: any,
-    countInPallet: any,
-    productCountInPallet: any,
-  ) {
-    try {
-      const response = await fetch(
-        `${Config.SERVER_URL}/printer/print-pallet`,
+        `${Config.SERVER_URL}/aggregation/${Config.TSD_ID}/search-product`,
         {
           method: 'POST',
           headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            palletNumber,
-            countInPallet,
-            productCountInPallet,
-          }),
+          body: JSON.stringify({ code }),
         },
       );
-      return response;
+
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        let errorData: any;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = responseText;
+        }
+
+        throw new Error(
+          errorData?.message ||
+            errorData?.error ||
+            `Ошибка HTTP: ${response.status}`,
+        );
+      }
+
+      return JSON.parse(responseText);
     } catch (error) {
-      console.error('Ошибка печати паллеты:', error);
-      throw error;
+      console.error('Ошибка поиска информации о товаре:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      };
     }
   }
 
@@ -233,7 +60,6 @@ export class ApiService {
       );
 
       const responseText = await response.text();
-
 
       let responseData: any;
 
@@ -274,9 +100,7 @@ export class ApiService {
       console.error('Ошибка обработки кода:', error);
 
       const message =
-        error instanceof Error
-          ? error.message
-          : 'Ошибка: попробуйте ещё раз.';
+        error instanceof Error ? error.message : 'Ошибка: попробуйте ещё раз.';
 
       return {
         success: false,
@@ -287,395 +111,364 @@ export class ApiService {
     }
   }
 
-  static async addCodeToBox(
-    code: string,
-    boxNumber: number,
-    palletNumber: any,
-    userId?: any,
-  ) {
+  static async addCodeToBox(packageLabel: string, code: string) {
     try {
-      console.log(`Добавление кода ${code} в коробку ${boxNumber}`);
+      console.log(`Добавление товара ${code} в упаковку ${packageLabel}`);
 
-      const response = await fetch(`${Config.SERVER_URL}/code/addCodeToBox`, {
+      const response = await fetch(
+        `${Config.SERVER_URL}/aggregation/${Config.TSD_ID}/add-product-into-package`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ packageLabel, code }),
+        },
+      );
+
+      const responseText = await response.text();
+      console.log('Ответ добавления товара в упаковку:', responseText);
+
+      let responseData: any;
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        responseData = responseText;
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          message: String(
+            responseData?.message ||
+              responseData?.error ||
+              `Ошибка HTTP: ${response.status}`,
+          ),
+          data: responseData,
+        };
+      }
+
+      if (!responseText.trim()) {
+        throw new Error('Сервер вернул пустой ответ');
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error('Ошибка добавления товара в упаковку:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      };
+    }
+  }
+
+  static async deleteCode(code: string) {
+    try {
+      console.log(`Удаление товара по коду: ${code}`);
+
+      const response = await fetch(
+        `${Config.SERVER_URL}/aggregation/${Config.TSD_ID}/delete-code`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ code }),
+        },
+      );
+
+      const responseText = await response.text();
+      console.log('Ответ удаления товара:', responseText);
+
+      let responseData: any;
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        responseData = responseText;
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          message: String(
+            responseData?.message ||
+              responseData?.error ||
+              `Ошибка HTTP: ${response.status}`,
+          ),
+          data: responseData,
+        };
+      }
+
+      return {
+        success: true,
+        message: responseData?.message || responseText || 'Товар удалён',
+        data: responseData,
+      };
+    } catch (error) {
+      console.error('Ошибка удаления товара:', error);
+
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      };
+    }
+  }
+
+  static async deletePackage(packageLabel: string) {
+    try {
+      console.log(`Удаление упаковки по этикетке: ${packageLabel}`);
+
+      const response = await fetch(
+        `${Config.SERVER_URL}/aggregation/${Config.TSD_ID}/delete-package`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ packageLabel }),
+        },
+      );
+
+      const responseText = await response.text();
+      console.log('Ответ удаления упаковки:', responseText);
+
+      let responseData: any;
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        responseData = responseText;
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          message: String(
+            responseData?.message ||
+              responseData?.error ||
+              `Ошибка HTTP: ${response.status}`,
+          ),
+          data: responseData,
+        };
+      }
+
+      return {
+        success: true,
+        message: responseData?.message || responseText || 'Упаковка удалена',
+        data: responseData,
+      };
+    } catch (error) {
+      console.error('Ошибка удаления упаковки:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      };
+    }
+  }
+
+  static async moveBox(boxLabel: string, palletLabel: string) {
+    try {
+      console.log(`Перемещение коробки ${boxLabel} в паллету ${palletLabel}`);
+
+      const response = await fetch(
+        `${Config.SERVER_URL}/aggregation/${Config.TSD_ID}/move-box`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ boxLabel, palletLabel }),
+        },
+      );
+
+      const responseText = await response.text();
+
+      let responseData: any;
+
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        responseData = responseText;
+      }
+
+      if (!response.ok || responseData?.success === false) {
+        return {
+          success: false,
+          message: String(
+            responseData?.message ||
+              responseData?.error ||
+              `Ошибка HTTP: ${response.status}`,
+          ),
+          data: responseData,
+        };
+      }
+
+      return {
+        success: true,
+        message: responseData?.message || 'Коробка перемещена в паллету',
+        data: responseData,
+      };
+    } catch (error) {
+      console.error('Ошибка перемещения коробки:', error);
+
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      };
+    }
+  }
+
+  static async PrintSmallBox(boxNumber: number, taskId: number) {
+    try {
+      return await fetch(`${Config.SERVER_URL}/printer/print-box`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ code, boxNumber, palletNumber, userId }),
+        body: JSON.stringify({ boxNumber, taskId }),
       });
-
-      const responseText = await response.text();
-      console.log('Ответ добавления:', responseText);
-
-      if (this.isTableNotExistsError(responseText)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      if (!response.ok) {
-        throw new Error(`Ошибка HTTP: ${response.status} - ${responseText}`);
-      }
-
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('Сервер вернул пустой ответ');
-      }
-
-      return JSON.parse(responseText);
     } catch (error) {
-      console.error('Ошибка добавления кода:', error);
-
-      if (error instanceof Error && this.isTableNotExistsError(error.message)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      return {
-        success: false,
-        message: `Ошибка: ${
-          error instanceof Error ? error.message : 'Неизвестная ошибка'
-        }`,
-      };
-    }
-  }
-
-  static async moveBoxToPallet(boxNumber: any, newPalletNumber: any) {
-    try {
-      console.log(
-        `Перемещение коробки ${boxNumber} на паллету ${newPalletNumber}`,
-      );
-
-      const response = await fetch(
-        `${Config.SERVER_URL}/code/move-box-to-pallet`,
-        {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ boxNumber, newPalletNumber }),
-        },
-      );
-
-      const responseText = await response.text();
-      console.log('Ответ перемещения:', responseText);
-
-      if (this.isTableNotExistsError(responseText)) {
-        Alert.alert('Информация', 'Фасовка не начата');
-        return { ok: false, message: 'Фасовка не начата' };
-      }
-
-      return response;
-    } catch (error) {
-      console.error('Ошибка перемещения коробки:', error);
+      console.error('Ошибка печати этикетки малой коробки:', error);
       throw error;
     }
   }
 
-  static async deleteCodes(codes: any) {
+  static async PrintBox(boxNumber: number, taskId: number) {
     try {
-      console.log(`Удаление кодов:`, codes);
-
-      const response = await fetch(`${Config.SERVER_URL}/code/deleteCodes`, {
-        method: 'DELETE',
+      return await fetch(`${Config.SERVER_URL}/printer/print-box`, {
+        method: 'POST',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ codes }),
+        body: JSON.stringify({ boxNumber, taskId }),
       });
-
-      const responseText = await response.text();
-      console.log('Ответ от сервера (deleteCodes):', responseText);
-
-      if (this.isTableNotExistsError(responseText)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      return {
-        success: response.ok,
-        message: responseText,
-      };
     } catch (error) {
-      console.error('Ошибка удаления кода:', error);
-
-      if (error instanceof Error && this.isTableNotExistsError(error.message)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
-      };
+      console.error('Ошибка печати этикетки большой коробки:', error);
+      throw error;
     }
   }
 
-  static async deleteBox(boxNumber: number) {
+  static async PrintPallet(palletNumber: number, taskId: number) {
     try {
-      console.log(`Удаление коробки: ${boxNumber}`);
-
-      const response = await fetch(`${Config.SERVER_URL}/code/deleteBox`, {
-        method: 'DELETE',
+      return await fetch(`${Config.SERVER_URL}/printer/print-pallet`, {
+        method: 'POST',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ boxNumber }),
+        body: JSON.stringify({ palletNumber, taskId }),
       });
-
-      const responseText = await response.text();
-      console.log('Ответ от сервера (deleteBox):', responseText);
-
-      if (this.isTableNotExistsError(responseText)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      const isSuccess = responseText === 'Короб успешно удален';
-
-      if (!response.ok || !isSuccess) {
-        throw new Error(responseText || `Ошибка HTTP: ${response.status}`);
-      }
-
-      return {
-        success: true,
-        message: responseText,
-        data: { boxNumber },
-      };
     } catch (error) {
-      console.error('Ошибка удаления коробки:', error);
-
-      if (error instanceof Error && this.isTableNotExistsError(error.message)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
-      };
+      console.error('Ошибка печати этикетки паллеты:', error);
+      throw error;
     }
   }
 
-  static async deletePallet(palletNumber: number) {
+  static async getTaskInWorkForTsd() {
     try {
-      console.log(`Удаление паллеты: ${palletNumber}`);
-
-      const response = await fetch(`${Config.SERVER_URL}/code/deletePallet`, {
-        method: 'DELETE',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ palletNumber }),
-      });
-
-      const responseText = await response.text();
-      console.log('Ответ от сервера (deletePallet):', responseText);
-
-      if (this.isTableNotExistsError(responseText)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      const isSuccess = responseText === 'Паллета успешно удалена';
-
-      if (!response.ok || !isSuccess) {
-        throw new Error(responseText || `Ошибка HTTP: ${response.status}`);
-      }
-
-      return {
-        success: true,
-        message: responseText,
-        data: { palletNumber },
-      };
-    } catch (error) {
-      console.error('Ошибка удаления паллеты:', error);
-
-      if (error instanceof Error && this.isTableNotExistsError(error.message)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
-      };
-    }
-  }
-
-  static async removeBoxFromPallet(boxNumber: number) {
-    try {
-      console.log(`Изъятие коробки из паллеты - ${boxNumber}`);
-
       const response = await fetch(
-        `${Config.SERVER_URL}/code/removeBoxFromPallet`,
+        `${Config.SERVER_URL}/task/tsd/${Config.TSD_ID}/in-work`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Ошибка получения задания в работе:', error);
+      throw error;
+    }
+  }
+
+  static async getTaskUnprocessedForTsd() {
+    try {
+      const response = await fetch(
+        `${Config.SERVER_URL}/task/tsd/${Config.TSD_ID}/unprocessed`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Ошибка получения необработанного задания:', error);
+      throw error;
+    }
+  }
+
+  static async startTask(taskId: number) {
+    try {
+      const response = await fetch(
+        `${Config.SERVER_URL}/task/${taskId}/start`,
         {
           method: 'POST',
           headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ boxNumber }),
+          body: JSON.stringify({ tsdId: Config.TSD_ID }),
         },
       );
 
-      const responseText = await response.text();
-      console.log('Ответ от сервера (removeBoxFromPallet):', responseText);
-
-      if (this.isTableNotExistsError(responseText)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
-      const isSuccess = responseText === 'Короб успешно изъят из паллеты';
-
-      if (!response.ok || !isSuccess) {
-        throw new Error(responseText || `Ошибка HTTP: ${response.status}`);
-      }
-
-      return {
-        success: true,
-        message: responseText,
-        data: { boxNumber },
-      };
+      const text = await response.text();
+      return text ? JSON.parse(text) : null;
     } catch (error) {
-      console.error('Ошибка изъятия коробки из паллеты:', error);
-
-      if (error instanceof Error && this.isTableNotExistsError(error.message)) {
-        return {
-          success: false,
-          message: 'Фасовка не начата',
-        };
-      }
-
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
-      };
+      console.error(`Ошибка запуска задания ${taskId}:`, error);
+      throw error;
     }
   }
-    static async getTaskInWorkForTsd() {
-        try {
-            const response = await fetch(
-                `${Config.SERVER_URL}/task/tsd/${Config.TSD_ID}/in-work`,
-                {
-                    method: 'GET',
-                    headers: {
-                        Accept: 'application/json',
-                        'Content-Type': 'application/json',
-                    },
-                },
-            );
 
-            if (!response.ok) {
-                const errorText = await response.text();
+  static async getActiveTask() {
+    try {
+      const response = await fetch(
+        `${Config.SERVER_URL}/task/tsd/active/${Config.TSD_ID}`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+        },
+      );
 
-                throw new Error(
-                    `HTTP ${response.status}: ${errorText}`,
-                );
-            }
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
 
-            return await response.json();
-        } catch (error) {
-            console.error(
-                'Ошибка получения задания в работе:',
-                error,
-            );
-
-            throw error;
-        }
+      const text = await response.text();
+      return text ? JSON.parse(text) : null;
+    } catch (error) {
+      console.error(`Нет активного задания`, error);
+      throw error;
     }
-
-    static async getTaskUnprocessedForTsd() {
-        try {
-            const response = await fetch(
-                `${Config.SERVER_URL}/task/tsd/${Config.TSD_ID}/unprocessed`,
-                {
-                    method: 'GET',
-                    headers: {
-                        Accept: 'application/json',
-                        'Content-Type': 'application/json',
-                    },
-                },
-            );
-
-            if (!response.ok) {
-                const errorText = await response.text();
-
-                throw new Error(
-                    `HTTP ${response.status}: ${errorText}`,
-                );
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error(
-                'Ошибка получения необработанного задания:',
-                error,
-            );
-
-            throw error;
-        }
-    }
-
-    static async startTask(taskId: number) {
-        try {
-            const response = await fetch(
-                `${Config.SERVER_URL}/task/${taskId}/start`,
-                {
-                    method: 'POST',
-                    headers: {
-                        Accept: 'application/json',
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        tsdId: Config.TSD_ID,
-                    }),
-                },
-            );
-
-            if (!response.ok) {
-                const errorText = await response.text();
-
-                throw new Error(
-                    `HTTP ${response.status}: ${errorText}`,
-                );
-            }
-
-            const text = await response.text();
-
-            return text
-                ? JSON.parse(text)
-                : null;
-        } catch (error) {
-            console.error(
-                `Ошибка запуска задания ${taskId}:`,
-                error,
-            );
-
-            throw error;
-        }
-    }
-
+  }
 }

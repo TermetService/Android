@@ -1,13 +1,10 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  KeyboardAvoidingView,
-  Platform,
   TouchableOpacity,
-  Modal,
   TextInput,
 } from 'react-native';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { styles } from './styles';
 import { ApiService } from '../../../services/api';
@@ -16,243 +13,300 @@ import { Config } from '../../../config';
 
 import { ExpectedScanType, getExpectedScanLabel } from '../expectedScan';
 
-// Компонент модального окна ручной работы
 interface ManualWorkModalProps {
-  visible: boolean;
-  onClose: () => void;
   expectedScan: ExpectedScanType | null;
   onExpectedScanChange: (expectedScan: ExpectedScanType) => void;
 }
 
-interface BoxInfo {
-  boxNumber: number;
-  palletNumber: number;
-  productsInBox: number;
-  limitProductsInBox: number;
-}
+type AlertConfig = {
+  title: string;
+  message: string;
+  type: 'success' | 'error';
+};
+
+const MAX_QUEUE_SIZE = 10;
+const SCAN_DELAY = 200;
 
 export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
-  visible,
-  onClose,
   expectedScan,
   onExpectedScanChange,
 }) => {
   const [code, setCode] = useState('');
-  const [boxInfo, setBoxInfo] = useState<BoxInfo | null>(null);
+  const [requestQueue, setRequestQueue] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [showCustomAlert, setShowCustomAlert] = useState(false);
-  const [alertConfig, setAlertConfig] = useState({
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
     title: '',
     message: '',
-    type: 'success' as 'success' | 'error',
+    type: 'error',
   });
+
   const [serverStatus, setServerStatus] = useState<
     'checking' | 'online' | 'offline'
   >('checking');
 
-  // Очередь с ограничением
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [requestQueue, setRequestQueue] = useState<string[]>([]);
-  const MAX_QUEUE_SIZE = 10; // Максимальный размер очереди
-
-  // const title = Config.USER_ID;
   const serverUrl = Config.SERVER_URL;
 
   const inputRef = useRef<TextInput>(null);
+  const queueRef = useRef<string[]>([]);
+  const isProcessingRef = useRef(false);
+  const canScanRef = useRef(true);
+  const mountedRef = useRef(false);
+  const scanUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alertCloseResolverRef = useRef<(() => void) | null>(null);
 
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+
+      if (scanUnlockTimerRef.current) {
+        clearTimeout(scanUnlockTimerRef.current);
+      }
+
+      alertCloseResolverRef.current?.();
+      alertCloseResolverRef.current = null;
+    };
+  }, []);
+
+  // Звуковая индикация ТСД.
+  const playBeep = useCallback((type: 'success' | 'error') => {
+    // Здесь можно подключить реальное воспроизведение звука.
+    console.log(type === 'success' ? '✓' : '✗');
+  }, []);
+
+  // Проверка доступности сервера.
   const pingServer = useCallback(async () => {
-    try {
+    if (mountedRef.current) {
       setServerStatus('checking');
-      const startTime = Date.now();
+    }
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const startTime = Date.now();
 
+    try {
       const response = await fetch(`${serverUrl}/aggregation`, {
         method: 'GET',
         headers: {
+          Accept: 'application/json',
           'Content-Type': 'application/json',
         },
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      if (!mountedRef.current) {
+        return;
+      }
 
       if (response.ok) {
-        const pingTime = Date.now() - startTime;
-        console.log(`Пинг сервера: ${pingTime}ms`);
+        console.log(`Пинг сервера: ${Date.now() - startTime}ms`);
         setServerStatus('online');
       } else {
         setServerStatus('offline');
       }
     } catch (error) {
-      console.log('Ошибка пинга сервера:', error);
-      setServerStatus('offline');
+      if (mountedRef.current) {
+        console.log('Ошибка пинга сервера:', error);
+        setServerStatus('offline');
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
   }, [serverUrl]);
 
-  // Звуковая индикация (для ТСД)
-  const playBeep = (type: 'success' | 'error') => {
-    // Здесь код для воспроизведения звукового сигнала ТСД
-    console.log(`${type === 'success' ? '✓' : '✗'}`);
-  };
-
   useEffect(() => {
-    if (visible) {
+    void pingServer();
+
+    const intervalId = setInterval(() => {
       void pingServer();
+    }, 30000);
 
-      const intervalId = setInterval(() => {
-        void pingServer();
-      }, 30000);
+    return () => clearInterval(intervalId);
+  }, [pingServer]);
 
-      return () => {
-        clearInterval(intervalId);
-      };
-    }
-  }, [visible, pingServer]);
-
+  // Автофокус при открытии экрана и после обработки сканов.
   useEffect(() => {
-    if (visible) {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [visible]);
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 500);
 
-  useEffect(() => {
-    if (!visible) {
-      setBoxInfo(null);
-      setCode('');
-      setServerStatus('checking');
-      setRequestQueue([]); // Очищаем очередь при закрытии
-    }
-  }, [visible]);
+    return () => clearTimeout(timer);
+  }, []);
 
-  // Обработка очереди
-  useEffect(() => {
-    const processQueue = async () => {
-      if (requestQueue.length > 0 && !isSubmitting) {
-        setIsSubmitting(true);
-        const currentCode = requestQueue[0];
+  // Показывает ошибку и ждёт, пока оператор её закроет.
+  const showErrorAndWait = useCallback(
+    (title: string, message: string): Promise<void> =>
+      new Promise(resolve => {
+        alertCloseResolverRef.current = resolve;
+
+        setAlertConfig({
+          title,
+          message,
+          type: 'error',
+        });
+
+        setShowCustomAlert(true);
+      }),
+    [],
+  );
+
+  /**
+   * Последовательно отправляет запросы.
+   *
+   * Один код — один вызов handSave.
+   * Следующий код отправляется после завершения предыдущего.
+   * При ошибке очередь приостанавливается до закрытия уведомления.
+   */
+  const processQueue = useCallback(async () => {
+    if (isProcessingRef.current || !mountedRef.current) {
+      return;
+    }
+
+    isProcessingRef.current = true;
+    setIsSubmitting(true);
+
+    try {
+      while (queueRef.current.length > 0) {
+        if (!mountedRef.current) {
+          break;
+        }
+
+        const currentCode = queueRef.current[0];
+
+        let failure: { title: string; message: string } | null = null;
 
         try {
           const result = await ApiService.handSave(currentCode);
 
-          // Убираем обработанный запрос
-          setRequestQueue(prev => prev.slice(1));
-
-          // Звуковой сигнал
-          playBeep(result.success ? 'success' : 'error');
-
-          // Показываем алерт только для ошибок
-          if (!result.success) {
-            setAlertConfig({
-              title: '⚠️ Ошибка',
-              message: result.message,
-              type: 'error',
-            });
-            setShowCustomAlert(true);
+          if (!mountedRef.current) {
+            return;
           }
 
-          // Обновляем ожидаемый тип сканирования из ответа сервера
+          playBeep(result.success ? 'success' : 'error');
+
+          // Сервер определяет, что сканировать следующим.
           if (result.success && result.expectedScan) {
             onExpectedScanChange(result.expectedScan);
           }
 
-          // Обновляем информацию о коробке из ответа
-          if (result.success && result.data?.result) {
-            setBoxInfo({
-              boxNumber: result.data.result.boxNumber,
-              palletNumber: result.data.result.palletNumber,
-              productsInBox: result.data.result.productsInBox,
-              limitProductsInBox:
-                parseInt(result.data.result.limitProductsInBox, 10) || 2,
-            });
+          if (!result.success) {
+            failure = {
+              title: '⚠️ Ошибка обработки',
+              message:
+                result.message || `Не удалось обработать код ${currentCode}`,
+            };
           }
-        } catch {
+        } catch (error) {
+          if (!mountedRef.current) {
+            return;
+          }
+
+          console.error(`Ошибка отправки кода ${currentCode}:`, error);
           playBeep('error');
-          setAlertConfig({
-            title: '❌ Ошибка',
-            message: 'Ошибка соединения с сервером',
-            type: 'error',
-          });
-          setShowCustomAlert(true);
+
+          failure = {
+            title: '❌ Ошибка соединения',
+            message: `Не удалось отправить код ${currentCode}. Проверьте соединение с сервером.`,
+          };
         } finally {
-          setIsSubmitting(false);
+          // Завершённый запрос удаляется независимо от результата.
+          queueRef.current = queueRef.current.slice(1);
+
+          if (mountedRef.current) {
+            setRequestQueue([...queueRef.current]);
+          }
+        }
+
+        // Не затираем уведомления следующими ошибками.
+        // Оператор закроет ошибку — после этого очередь продолжится.
+        if (failure && mountedRef.current) {
+          await showErrorAndWait(failure.title, failure.message);
         }
       }
-    };
+    } finally {
+      isProcessingRef.current = false;
 
-    void processQueue();
-  }, [requestQueue, isSubmitting, onExpectedScanChange]);
+      if (mountedRef.current) {
+        setIsSubmitting(false);
+      }
+    }
+  }, [onExpectedScanChange, playBeep, showErrorAndWait]);
 
-  const [canScan, setCanScan] = useState(true);
-  const SCAN_DELAY = 100; // 100 мс задержка между сканами
-
+  // Добавляет новый код в очередь.
   const handleSubmit = () => {
     const trimmedCode = code.trim();
-    if (!trimmedCode) return;
 
-    if (!canScan) {
+    if (!trimmedCode) {
+      return;
+    }
+
+    if (!canScanRef.current) {
       playBeep('error');
+
       setAlertConfig({
         title: '⚠️ Слишком быстро',
         message: 'Подождите перед следующим сканированием',
         type: 'error',
       });
+
       setShowCustomAlert(true);
       setCode('');
       inputRef.current?.focus();
       return;
     }
 
-    // Проверка размера очереди
-    if (requestQueue.length >= MAX_QUEUE_SIZE) {
+    if (queueRef.current.length >= MAX_QUEUE_SIZE) {
       playBeep('error');
+
       setAlertConfig({
-        title: '⚠️ Переполнение',
-        message: 'Очередь переполнена. Дождитесь обработки',
+        title: '⚠️ Очередь переполнена',
+        message: 'Дождитесь обработки текущих запросов',
         type: 'error',
       });
+
       setShowCustomAlert(true);
       setCode('');
       inputRef.current?.focus();
       return;
     }
 
-    // Добавляем в очередь
-    setRequestQueue(prev => [...prev, trimmedCode]);
-    setCanScan(false);
-    // Очищаем поле для следующего скана
+
+
+    const updatedQueue = [...queueRef.current, trimmedCode];
+
+    queueRef.current = updatedQueue;
+    setRequestQueue(updatedQueue);
     setCode('');
+
+    // Не сигнализируем об успехе до ответа сервера.
     inputRef.current?.focus();
-    setTimeout(() => {
-      setCanScan(true);
-      inputRef.current?.focus();
-    }, SCAN_DELAY);
-    // Короткий сигнал подтверждения сканирования
-    playBeep('success');
-  };
 
-  // Обработка нажатия Enter
-  const handleKeyPress = (event: any) => {
-    if (event.nativeEvent.key === 'Enter') {
-      handleSubmit();
+    if (scanUnlockTimerRef.current) {
+      clearTimeout(scanUnlockTimerRef.current);
     }
+
+    scanUnlockTimerRef.current = setTimeout(() => {
+      canScanRef.current = true;
+
+      if (mountedRef.current) {
+        inputRef.current?.focus();
+      }
+    }, SCAN_DELAY);
+
+    void processQueue();
   };
 
-  // Обработчик закрытия кастомного алерта
   const handleAlertClose = () => {
     setShowCustomAlert(false);
+
+    const resolve = alertCloseResolverRef.current;
+    alertCloseResolverRef.current = null;
+    resolve?.();
   };
 
-  // Вычисление процента заполнения коробки
-  const getFillPercentage = (): number => {
-    if (!boxInfo) return 0;
-    return (boxInfo.productsInBox / boxInfo.limitProductsInBox) * 100;
-  };
-
-  // Получение цвета и иконки для статуса сервера
   const getServerStatusIcon = () => {
     switch (serverStatus) {
       case 'online':
@@ -266,147 +320,85 @@ export const ManualWorkModal: React.FC<ManualWorkModalProps> = ({
     }
   };
 
-  // Отображение статуса очереди (используем существующие стили)
-  const renderQueueStatus = () => {
-    if (requestQueue.length > 0) {
-      return (
-        <View style={styles.infoContainer}>
-          {/* eslint-disable-next-line react-native/no-inline-styles */}
-          <Text style={[styles.modalOperatorTitle, { color: '#FF9800' }]}>
-            📦 В очереди: {requestQueue.length}
-          </Text>
-        </View>
-      );
-    }
-    return null;
-  };
-
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={false}
-      onRequestClose={onClose}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
-      >
-        {/* Информация об операторе и сервере */}
-        <View style={styles.modalHeader}>
-          <View style={styles.infoContainer}>
-            {/* <Text style={styles.modalOperatorTitle}>
-                            Оператор №{title}
-                        </Text> */}
-            <TouchableOpacity
-              onPress={pingServer}
-              style={styles.serverInfoButton}
-              disabled={serverStatus === 'checking'}
+    <View style={styles.modalContainer}>
+      {/* Статус сервера */}
+      <View style={[styles.modalHeader, { paddingTop: 12 }]}>
+        <View style={styles.infoContainer}>
+          <TouchableOpacity
+            onPress={() => void pingServer()}
+            style={styles.serverInfoButton}
+            disabled={serverStatus === 'checking'}
+          >
+            <Text
+              style={[
+                styles.serverInfoText,
+                serverStatus === 'offline' && styles.serverInfoTextOffline,
+                serverStatus === 'online' && styles.serverInfoTextOnline,
+              ]}
             >
-              <Text
-                style={[
-                  styles.serverInfoText,
-                  serverStatus === 'offline' && styles.serverInfoTextOffline,
-                  serverStatus === 'online' && styles.serverInfoTextOnline,
-                ]}
-              >
-                {getServerStatusIcon()} Сервер: {serverUrl}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Заголовок модального окна */}
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Режим ручной работы</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>✕</Text>
+              {getServerStatusIcon()} Сервер: {serverUrl}
+            </Text>
           </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Ожидаемое сканирование */}
+      {/* Основная информация */}
+      <View style={styles.contentArea}>
+        {/* Ожидаемый тип сканирования */}
         <View style={styles.expectedScanContainer}>
           <Text style={styles.expectedScanTitle}>Следующее сканирование</Text>
 
           <Text style={styles.expectedScanValue}>
             {getExpectedScanLabel(expectedScan)}
           </Text>
-
-          {__DEV__ && expectedScan && (
-            <Text style={styles.expectedScanType}>{expectedScan}</Text>
-          )}
         </View>
 
-        {/* Статус очереди */}
-        {renderQueueStatus()}
-
-        {/* Информация о коробке (вверху экрана) */}
-        {boxInfo && (
-          <View style={styles.boxInfoContainer}>
-            <View style={styles.boxIconWrapper}>
-              <View style={styles.boxIcon}>
-                <Text style={styles.boxNumberText}>{boxInfo.boxNumber}</Text>
-              </View>
-              <Text style={styles.palletInfo}>
-                Паллета {boxInfo.palletNumber}
-              </Text>
-            </View>
-
-            <View style={styles.statusBarContainer}>
-              <View style={styles.statusBarHeader}>
-                <Text style={styles.statusBarTitle}>Заполнение коробки</Text>
-                <Text style={styles.statusBarValue}>
-                  {boxInfo.productsInBox} из {boxInfo.limitProductsInBox}
-                </Text>
-              </View>
-              <View style={styles.statusBar}>
-                <View
-                  style={[
-                    styles.statusBarFill,
-                    {
-                      width: `${getFillPercentage()}%`,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
+        {/* Состояние очереди */}
+        {requestQueue.length > 0 && (
+          <View style={styles.infoContainer}>
+            <Text style={[styles.modalOperatorTitle, { color: '#FF9800' }]}>
+              📦 Запросов в очереди: {requestQueue.length}
+              {isSubmitting ? ' · обработка' : ''}
+            </Text>
           </View>
         )}
 
-        {/* Поле ввода по центру оставшейся части экрана */}
-        <View style={styles.inputWrapper}>
-          <TextInput
-            ref={inputRef}
-            style={styles.manualWorkInput}
-            value={code}
-            onChangeText={setCode}
-            onSubmitEditing={handleSubmit}
-            onKeyPress={handleKeyPress}
-            placeholder={
-              requestQueue.length > 0
-                ? `Очередь: ${requestQueue.length} | Введите код...`
-                : getExpectedScanLabel(expectedScan)
-            }
-            placeholderTextColor="#999"
-            autoCapitalize="characters"
-            autoCorrect={false}
-            autoFocus={true}
-            returnKeyType="done"
-            submitBehavior="submit"
-            editable={requestQueue.length < MAX_QUEUE_SIZE}
-          />
-        </View>
+        {/* Здесь размещай дополнительные информационные блоки,
+          например информацию о коробке и счётчики */}
+      </View>
 
-        {/* Кастомный алерт */}
-        <CustomAlert
-          visible={showCustomAlert}
-          title={alertConfig.title}
-          message={alertConfig.message}
-          type={alertConfig.type}
-          onClose={handleAlertClose}
-          autoCloseTime={alertConfig.type === 'success' ? 100 : undefined}
+      {/* Поле сканирования */}
+      <View style={styles.inputWrapper}>
+        <TextInput
+          autoFocus
+          ref={inputRef}
+          style={styles.manualWorkInput}
+          value={code}
+          onChangeText={setCode}
+          onSubmitEditing={handleSubmit}
+          placeholder={
+            requestQueue.length > 0
+              ? `Очередь: ${requestQueue.length} | Введите код...`
+              : getExpectedScanLabel(expectedScan)
+          }
+          placeholderTextColor="#999"
+          autoCapitalize="characters"
+          autoCorrect={false}
+          returnKeyType="done"
+          submitBehavior="submit"
+          editable={requestQueue.length < MAX_QUEUE_SIZE}
         />
-      </KeyboardAvoidingView>
-    </Modal>
+      </View>
+
+      {/* Уведомления */}
+      <CustomAlert
+        visible={showCustomAlert}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        onClose={handleAlertClose}
+      />
+    </View>
   );
 };

@@ -6,94 +6,86 @@ import { TaskSelectionScreen } from './src/screens/TaskSelectionScreen/TaskSelec
 import { HandWorkScreen } from './src/screens/HandWorkScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 
-import { BurgerMenu } from './src/components/BurgerMenu';
+import { Header } from './src/components/BurgerMenu';
+import type { MenuItem } from './src/components/BurgerMenu';
+import { Config } from './src/config';
 
 enum Pages {
+  TaskSelection = 'task-selection',
   Search = 'search',
   HandWork = 'handwork',
 }
 
 const App = () => {
-  const [
-    currentScreen,
-    setCurrentScreen,
-  ] = useState<Pages>(
-    Pages.HandWork,
+  const [currentScreen, setCurrentScreen] = useState<Pages>(
+    Pages.TaskSelection,
   );
 
-  const [
-    taskId,
-    setTaskId,
-  ] = useState<number | null>(null);
+  const [taskId, setTaskId] = useState<number | null>(null);
 
-  const handleTaskSelected = (
-    selectedTaskId: number,
-  ) => {
+  const handleTaskSelected = (selectedTaskId: number) => {
     setTaskId(selectedTaskId);
-    setCurrentScreen(
-      Pages.HandWork,
-    );
+    setCurrentScreen(Pages.HandWork);
+  };
+
+  const menuItems: MenuItem[] = [
+    {
+      id: 'tasks',
+      title: 'Выбор задания',
+      onPress: () => setCurrentScreen(Pages.TaskSelection),
+    },
+    {
+      id: 'search',
+      title: 'Поиск',
+      onPress: () => setCurrentScreen(Pages.Search),
+    },
+    {
+      id: 'handwork',
+      title: 'Ручная работа',
+      onPress: () => {
+        setCurrentScreen(
+          taskId !== null ? Pages.HandWork : Pages.TaskSelection,
+        );
+      },
+    },
+  ];
+
+  const screenTitles: Record<Pages, string> = {
+    [Pages.TaskSelection]: 'Выбор задания',
+    [Pages.Search]: 'Поиск',
+    [Pages.HandWork]: 'Ручная работа',
   };
 
   const renderScreen = () => {
-    if (!taskId) {
-      return (
-        <TaskSelectionScreen
-          onTaskSelected={
-            handleTaskSelected
-          }
-        />
-      );
-    }
-
     switch (currentScreen) {
+      case Pages.TaskSelection:
+        return <TaskSelectionScreen onTaskSelected={handleTaskSelected} />;
+
       case Pages.Search:
         return <SearchScreen />;
 
       case Pages.HandWork:
-        return (
-          <HandWorkScreen
-            taskId={taskId}
-          />
+        return taskId !== null ? (
+          <HandWorkScreen />
+        ) : (
+          <TaskSelectionScreen onTaskSelected={handleTaskSelected} />
         );
 
       default:
-        return (
-          <HandWorkScreen
-            taskId={taskId}
-          />
-        );
+        return <TaskSelectionScreen onTaskSelected={handleTaskSelected} />;
     }
   };
 
-  const menuItems = [
-    {
-      id: '1',
-      title: 'Поиск',
-      onPress: () =>
-        setCurrentScreen(
-          Pages.Search,
-        ),
-    },
-    {
-      id: '2',
-      title: 'Ручная работа',
-      onPress: () =>
-        setCurrentScreen(
-          Pages.HandWork,
-        ),
-    },
-  ];
-
   return (
-    <>
-      {renderScreen()}
+    <View style={{ flex: 1 }}>
+      <Header
+        title={screenTitles[currentScreen]}
+        menuItems={menuItems}
+        showMenu={currentScreen !== Pages.TaskSelection}
+        tsd_id={Config.TSD_ID}
+      />
 
-      {taskId && (
-        <BurgerMenu
-          menuItems={menuItems}
-        />
-      )}
+      <View style={{ flex: 1 }}>{renderScreen()}</View>
 
       <View
         style={{
@@ -108,7 +100,7 @@ const App = () => {
       >
         <Toast />
       </View>
-    </>
+    </View>
   );
 };
 
