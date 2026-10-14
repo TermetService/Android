@@ -839,6 +839,34 @@ export class ApiService {
     }
   }
 
+  static async getApiStatus() {
+    try {
+      const response = await fetch(
+        `${Config.SERVER_URL}/code/api-status`,
+      );
+
+      const responseText = await response.text();
+
+      if (this.isTableNotExistsError(responseText)) {
+        return { success: false, isUsingApi: false };
+      }
+
+      const responseData = responseText ? JSON.parse(responseText) : null;
+
+      if (!response.ok) {
+        return { success: false, isUsingApi: false, message: responseData?.error };
+      }
+
+      return {
+        success: true,
+        isUsingApi: responseData?.isUsingApi ?? false,
+      };
+    } catch (error) {
+      console.error('Ошибка получения статуса API:', error);
+      return { success: false, isUsingApi: false };
+    }
+  }
+
   static async getCurrentMode() {
     try {
     } catch (error) {

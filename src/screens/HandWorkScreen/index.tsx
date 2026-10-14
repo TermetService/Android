@@ -56,7 +56,7 @@ export const HandWorkScreen = () => {
       return null;
     }
 
-    if (isUsingApi === true) {
+    if (  isUsingApi) {
       return (
         <ManualWorkModalOld visible={showManualModal} onClose={stopHandWork} />
       );
