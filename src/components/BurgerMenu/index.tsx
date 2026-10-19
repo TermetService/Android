@@ -17,7 +17,8 @@ interface HeaderProps {
   title: string;
   menuItems: MenuItem[];
   showMenu?: boolean;
-  tsd_id: number;
+  tsd_id?: number;
+  onLogout: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   menuItems,
   showMenu = true,
   tsd_id,
+  onLogout,
 }) => {
   return (
     <View style={styles.screenHeader}>
@@ -35,6 +37,14 @@ export const Header: React.FC<HeaderProps> = ({
       </Text>
 
       {tsd_id !== undefined && <Text style={styles.tsdId}>ТСД: {tsd_id}</Text>}
+
+      <TouchableOpacity
+        style={styles.logoutButton}
+        onPress={onLogout}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.logoutButtonText}>Выйти</Text>
+      </TouchableOpacity>
     </View>
   );
 };

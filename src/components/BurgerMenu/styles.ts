@@ -8,6 +8,20 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  logoutButton: {
+    marginLeft: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: '#f8d7da',
+    borderRadius: 6,
+  },
+
+  logoutButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#721c24',
+  },
+
   burgerIcon: {
     fontSize: 27,
     color: '#222',
