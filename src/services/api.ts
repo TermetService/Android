@@ -81,7 +81,9 @@ export class ApiService {
       const expectedScan =
         typeof responseData === 'string'
           ? responseData
-          : responseData?.expectedScan ?? responseData?.data?.expectedScan ?? null;
+          : responseData?.expectedScan ??
+            responseData?.data?.expectedScan ??
+            null;
 
       return {
         success: true,
@@ -271,11 +273,9 @@ export class ApiService {
 
   static async startTask(taskId: number) {
     try {
-      return await this.requestJson(
-        this.taskUrl(`/${taskId}/start`),
-        'POST',
-        { tsdId: Config.TSD_ID },
-      );
+      return await this.requestJson(this.taskUrl(`/${taskId}/start`), 'POST', {
+        tsdId: Config.TSD_ID,
+      });
     } catch (error) {
       console.error(`Ошибка запуска задания ${taskId}:`, error);
       throw error;
@@ -332,17 +332,15 @@ export class ApiService {
     }
   }
 
-
   // ---------------------------------------------------------------------------
   // Авторизация и выход
   // ---------------------------------------------------------------------------
 
   static async authUser(username: string, password: string): Promise<object> {
-    return this.requestJson<object>(
-      `${Config.SERVER_URL}/users/auth`,
-      'POST',
-      { username, password },
-    );
+    return this.requestJson<object>(`${Config.SERVER_URL}/users/auth`, 'POST', {
+      username,
+      password,
+    });
   }
 
   static async logOut() {
@@ -353,6 +351,15 @@ export class ApiService {
       );
     } catch (error) {
       console.error('Ошибка выхода пользователя:', error);
+      throw error;
+    }
+  }
+
+  static async validateTaskCompletion() {
+    try {
+      return await this.requestJson(this.aggregationUrl('/getStats'));
+    } catch (error) {
+      console.error('Ошибка получения статистики агрегации:', error);
       throw error;
     }
   }
