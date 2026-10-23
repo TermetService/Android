@@ -21,18 +21,18 @@ interface AuthUser {
   id: number;
   username: string;
   role: string;
+  key: string;
 }
 
 interface Credentials {
   username: string;
   password: string;
+  key?: string;
 }
 
 interface LoginScreenProps {
   onAuthenticated: (user: AuthUser) => void;
 }
-
-//TODO при выходе завершать сессию
 
 const getErrorMessage = (error: unknown): string => {
   const e = error as {
@@ -55,30 +55,41 @@ const getErrorMessage = (error: unknown): string => {
   );
 };
 
-export const Index: React.FC<LoginScreenProps> = ({
-  onAuthenticated,
-}) => {
+const isValidUser = (user: AuthUser): boolean => {
+  return Number.isInteger(Number(user?.id)) && Number(user.id) > 0;
+};
+
+export const Index: React.FC<LoginScreenProps> = ({ onAuthenticated }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [savedKey, setSavedKey] = useState('');
+  const [savedUsername, setSavedUsername] = useState('');
+
   const [checkingSaved, setCheckingSaved] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const authenticate = useCallback(
     (user: AuthUser): void => {
-      const userId = Number(user.id);
-
-      if (!Number.isInteger(userId) || userId <= 0) {
+      if (!isValidUser(user)) {
         throw new Error('Сервер не вернул корректный ID пользователя');
       }
 
-      Config.TSD_ID = userId;
+      Config.TSD_ID = Number(user.id);
       onAuthenticated(user);
     },
     [onAuthenticated],
   );
 
-  // Проверяем сохранённые данные при запуске приложения.
+  const saveCredentials = async (credentials: Credentials): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(credentials));
+    } catch {
+      // Не блокируем вход, если данные не удалось сохранить.
+    }
+  };
+
+  // Восстанавливаем сессию при запуске приложения.
   useEffect(() => {
     let active = true;
 
@@ -100,10 +111,10 @@ export const Index: React.FC<LoginScreenProps> = ({
         }
 
         if (
-          !credentials.username ||
           typeof credentials.username !== 'string' ||
-          !credentials.password ||
-          typeof credentials.password !== 'string'
+          !credentials.username.trim() ||
+          typeof credentials.password !== 'string' ||
+          !credentials.password
         ) {
           await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
           return;
@@ -114,16 +125,36 @@ export const Index: React.FC<LoginScreenProps> = ({
         }
 
         setUsername(credentials.username);
+        setSavedUsername(credentials.username);
+        setSavedKey(typeof credentials.key === 'string' ? credentials.key : '');
 
         try {
           const user = (await ApiService.authUser(
             credentials.username,
             credentials.password,
+            credentials.key ?? '',
           )) as AuthUser;
 
-          if (active) {
-            authenticate(user);
+          if (!active) {
+            return;
           }
+
+          if (!isValidUser(user)) {
+            throw new Error('Сервер не вернул корректный ID пользователя');
+          }
+
+          await saveCredentials({
+            username: credentials.username,
+            password: credentials.password,
+            key: user.key,
+          });
+
+          if (!active) {
+            return;
+          }
+
+          setSavedKey(user.key ?? '');
+          authenticate(user);
         } catch (err) {
           if (active) {
             setError(
@@ -150,6 +181,10 @@ export const Index: React.FC<LoginScreenProps> = ({
   }, [authenticate]);
 
   const handleLogin = async (): Promise<void> => {
+    if (loading) {
+      return;
+    }
+
     const cleanUsername = username.trim();
 
     if (!cleanUsername || !password) {
@@ -161,32 +196,29 @@ export const Index: React.FC<LoginScreenProps> = ({
     setError('');
 
     try {
+      // Используем сохранённый ключ только для того же пользователя.
+      const key = cleanUsername === savedUsername ? savedKey : '';
+
       const user = (await ApiService.authUser(
         cleanUsername,
         password,
+        key,
       )) as AuthUser;
 
-      // Проверяем ID до сохранения данных.
-      const userId = Number(user.id);
-
-      if (!Number.isInteger(userId) || userId <= 0) {
+      if (!isValidUser(user)) {
         throw new Error('Сервер не вернул корректный ID пользователя');
       }
 
-      // Сохраняем данные после успешной авторизации на сервере.
-      try {
-        await AsyncStorage.setItem(
-          AUTH_STORAGE_KEY,
-          JSON.stringify({
-            username: cleanUsername,
-            password,
-          } satisfies Credentials),
-        );
-      } catch {
-        // Не блокируем вход, если не удалось сохранить данные.
-      }
+      // Сохраняем обновлённый ключ сессии.
+      await saveCredentials({
+        username: cleanUsername,
+        password,
+        key: user.key,
+      });
 
-      // Устанавливаем Config.TSD_ID и переключаем экран.
+      setSavedUsername(cleanUsername);
+      setSavedKey(user.key ?? '');
+
       authenticate(user);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -215,12 +247,14 @@ export const Index: React.FC<LoginScreenProps> = ({
       >
         <View style={styles.loginCard}>
           <Text style={styles.loginTitle}>Вход в систему</Text>
+
           <Text style={styles.loginSubtitle}>
             Авторизуйтесь для начала работы с ТСД
           </Text>
 
           <View style={styles.loginForm}>
             <Text style={styles.loginLabel}>Логин</Text>
+
             <TextInput
               style={styles.loginInput}
               value={username}
@@ -233,6 +267,7 @@ export const Index: React.FC<LoginScreenProps> = ({
             />
 
             <Text style={styles.loginLabel}>Пароль</Text>
+
             <TextInput
               style={styles.loginInput}
               value={password}

@@ -164,14 +164,9 @@ export const SearchActionsModal = ({
     setIsDeleting(true);
 
     try {
-      const response =
         target.scanType === 'PRODUCT'
           ? await ApiService.deleteCode(target.code)
           : await ApiService.deletePackage(target.code);
-
-      if (response?.success === false) {
-        throw new Error(response.message || 'Сервер отклонил удаление');
-      }
 
       Alert.alert(
         'Удалено',
@@ -223,7 +218,7 @@ export const SearchActionsModal = ({
               {
                 text: 'Удалить окончательно',
                 style: 'destructive',
-                onPress: () => void deleteActionTarget(target),
+                onPress: () => deleteActionTarget(target),
               },
             ],
           );

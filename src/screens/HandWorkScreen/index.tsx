@@ -1,11 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-} from 'react-native';
-
+import { View, Text, TouchableOpacity, TextInput } from 'react-native';
+import type { AggregationResponse } from '../../services/api';
 import { styles } from './styles';
 import { ApiService } from '../../services/api';
 import { CustomAlert } from '../../components/CustomAlert';
@@ -21,15 +16,24 @@ interface AlertConfig {
 }
 
 const MAX_QUEUE_SIZE = 10;
-const SCAN_DELAY = 200;
 
-export const HandWorkScreen: React.FC = () => {
+interface HandWorkScreenProps {
+  onTaskCompleted: () => void;
+}
+
+export const HandWorkScreen: React.FC<HandWorkScreenProps> = ({
+  onTaskCompleted,
+}) => {
   const [expectedScan, setExpectedScan] = useState<ExpectedScanType | null>(
     null,
   );
+
   const [code, setCode] = useState('');
   const [requestQueue, setRequestQueue] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [isCompletingTask, setIsCompletingTask] = useState(false);
+  const [isValidatingTask, setIsValidatingTask] = useState(false);
 
   const [showCustomAlert, setShowCustomAlert] = useState(false);
   const [alertConfig, setAlertConfig] = useState<AlertConfig>({
@@ -41,75 +45,141 @@ export const HandWorkScreen: React.FC = () => {
   const [serverStatus, setServerStatus] = useState<
     'checking' | 'online' | 'offline'
   >('checking');
+
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [taskPackagingStats, setTaskPackagingStats] =
     useState<TaskPackagingStats | null>(null);
-  const [isValidatingTask, setIsValidatingTask] = useState(false);
+
+  const [fillProgress, setFillProgress] = useState<
+    Pick<AggregationResponse, 'smallBox' | 'bigBox' | 'pallet'>
+  >({
+    smallBox: null,
+    bigBox: null,
+    pallet: null,
+  });
 
   const serverUrl = Config.SERVER_URL;
 
+  // Ссылка на нативное поле ввода.
   const inputRef = useRef<TextInput>(null);
+
+  // Актуальное значение поля без ожидания следующего рендера.
+  const codeRef = useRef('');
+
+  // Рабочая очередь кодов.
   const queueRef = useRef<string[]>([]);
+
+  // Защита от параллельной обработки очереди.
   const isProcessingRef = useRef(false);
-  const canScanRef = useRef(true);
+
+  // Проверка, что экран ещё смонтирован.
   const mountedRef = useRef(false);
-  const scanUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stateRevisionRef = useRef(0);
+
+  const currentStateRequestRef = useRef<Promise<AggregationResponse> | null>(
+    null,
+  );
+
+  // Продолжение обработки очереди после закрытия уведомления.
   const alertCloseResolverRef = useRef<(() => void) | null>(null);
 
-  const handleOpenCompletion = async () => {
-    if (isValidatingTask) {
-      return;
-    }
+  // Блокировка поля при отображении модальных окон и переполнении очереди.
+  const isInputBlocked =
+    showCustomAlert ||
+    showCompletionModal ||
+    isValidatingTask ||
+    isCompletingTask ||
+    requestQueue.length >= MAX_QUEUE_SIZE;
 
-    setIsValidatingTask(true);
-
-    try {
-      const stats = await ApiService.validateTaskCompletion();
-
-      if (!mountedRef.current) {
-        return;
-      }
-
-      setTaskPackagingStats(stats);
-      setShowCompletionModal(true);
-    } catch (error) {
-      console.error('Ошибка проверки задания:', error);
-
-      if (!mountedRef.current) {
-        return;
-      }
-
-      setAlertConfig({
-        title: 'Ошибка проверки',
-        message: 'Не удалось получить результат проверки задания.',
-        type: 'error',
-      });
-      setShowCustomAlert(true);
-    } finally {
-      if (mountedRef.current) {
-        setIsValidatingTask(false);
-      }
-    }
+  const handleCodeChange = (value: string) => {
+    codeRef.current = value;
+    setCode(value);
   };
 
-  useEffect(() => {
-    mountedRef.current = true;
-
-    return () => {
-      mountedRef.current = false;
-
-      if (scanUnlockTimerRef.current) {
-        clearTimeout(scanUnlockTimerRef.current);
-      }
-
-      alertCloseResolverRef.current?.();
-      alertCloseResolverRef.current = null;
-    };
-  }, []);
+  // Очищаем и нативное поле, и React state.
+  const clearCodeInput = () => {
+    codeRef.current = '';
+    inputRef.current?.clear();
+    setCode('');
+  };
 
   // Звуковая индикация ТСД.
   const playBeep = useCallback((type: 'success' | 'error') => {
     console.log(type === 'success' ? '✓' : '✗');
+  }, []);
+
+  // Показать уведомление и дождаться его закрытия.
+  const showErrorAndWait = useCallback(
+    (title: string, message: string): Promise<void> =>
+      new Promise(resolve => {
+        alertCloseResolverRef.current = resolve;
+
+        setAlertConfig({
+          title,
+          message,
+          type: 'error',
+        });
+
+        setShowCustomAlert(true);
+      }),
+    [],
+  );
+
+  // Загрузка текущего состояния при открытии экрана.
+  useEffect(() => {
+    mountedRef.current = true;
+    let cancelled = false;
+
+    const initialRevision = stateRevisionRef.current;
+
+    const loadCurrentState = async () => {
+      try {
+        // Повторное выполнение эффекта использует тот же запрос.
+        const request =
+          currentStateRequestRef.current ??
+          (currentStateRequestRef.current = ApiService.getCurrentState());
+
+        const responseData = await request;
+
+        // Не применяем устаревший ответ.
+        if (
+          cancelled ||
+          !mountedRef.current ||
+          stateRevisionRef.current !== initialRevision
+        ) {
+          return;
+        }
+
+        const response = responseData as AggregationResponse & {
+          data?: AggregationResponse;
+        };
+
+        const result = response.data ?? response;
+
+        setExpectedScan(result.expectedScan);
+
+        setFillProgress({
+          smallBox: result.smallBox ?? null,
+          bigBox: result.bigBox ?? null,
+          pallet: result.pallet ?? null,
+        });
+      } catch (error) {
+        if (!cancelled && mountedRef.current) {
+          console.error('Ошибка получения текущего состояния:', error);
+        }
+      }
+    };
+
+    void loadCurrentState();
+
+    return () => {
+      cancelled = true;
+      mountedRef.current = false;
+
+      alertCloseResolverRef.current?.();
+      alertCloseResolverRef.current = null;
+    };
   }, []);
 
   // Проверка доступности сервера.
@@ -152,6 +222,7 @@ export const HandWorkScreen: React.FC = () => {
     }
   }, [serverUrl]);
 
+  // Первый пинг и последующие проверки раз в 30 секунд.
   useEffect(() => {
     void pingServer();
 
@@ -162,31 +233,21 @@ export const HandWorkScreen: React.FC = () => {
     return () => clearInterval(intervalId);
   }, [pingServer]);
 
-  // Автофокус при открытии экрана.
+  // Единое управление фокусом поля.
   useEffect(() => {
+    if (isInputBlocked) {
+      inputRef.current?.blur();
+      return;
+    }
+
     const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 500);
+      if (mountedRef.current && !isInputBlocked) {
+        inputRef.current?.focus();
+      }
+    }, 150);
 
     return () => clearTimeout(timer);
-  }, []);
-
-  // Показывает ошибку и ждёт её закрытия.
-  const showErrorAndWait = useCallback(
-    (title: string, message: string): Promise<void> =>
-      new Promise(resolve => {
-        alertCloseResolverRef.current = resolve;
-
-        setAlertConfig({
-          title,
-          message,
-          type: 'error',
-        });
-
-        setShowCustomAlert(true);
-      }),
-    [],
-  );
+  }, [isInputBlocked]);
 
   // Последовательная обработка очереди.
   const processQueue = useCallback(async () => {
@@ -205,43 +266,53 @@ export const HandWorkScreen: React.FC = () => {
 
         const currentCode = queueRef.current[0];
 
-        let failure: { title: string; message: string } | null = null;
+        let failure: {
+          title: string;
+          message: string;
+        } | null = null;
 
         try {
-          const result = await ApiService.handSave(currentCode);
+          const responseData = await ApiService.handSave(currentCode);
 
           if (!mountedRef.current) {
             return;
           }
 
-          playBeep(result.success ? 'success' : 'error');
+          playBeep('success');
 
-          // Сервер определяет следующий тип сканирования.
-          if (result.success && result.expectedScan) {
-            setExpectedScan(result.expectedScan);
-          }
+          // Следующий тип сканирования извлекаем из ответа сервера.
+          // Обновляем ожидаемый тип сканирования и заполненность.
+          const response = responseData as AggregationResponse & {
+            data?: AggregationResponse;
+          };
 
-          if (!result.success) {
-            failure = {
-              title: '⚠️ Ошибка обработки',
-              message:
-                result.message || `Не удалось обработать код ${currentCode}`,
-            };
-          }
+          const result = response.data ?? response;
+
+          stateRevisionRef.current += 1;
+
+          setExpectedScan(result.expectedScan);
+
+          setFillProgress({
+            smallBox: result.smallBox ?? null,
+            bigBox: result.bigBox ?? null,
+            pallet: result.pallet ?? null,
+          });
         } catch (error) {
           if (!mountedRef.current) {
             return;
           }
 
-          console.error(`Ошибка отправки кода ${currentCode}:`, error);
           playBeep('error');
 
           failure = {
-            title: '❌ Ошибка соединения',
-            message: `Не удалось отправить код ${currentCode}. Проверьте соединение с сервером.`,
+            title: '⚠️ Ошибка обработки',
+            message:
+              error instanceof Error
+                ? error.message
+                : `Не удалось обработать код ${currentCode}`,
           };
         } finally {
-          // Удаляем обработанный запрос независимо от результата.
+          // Удаляем обработанный элемент независимо от результата.
           queueRef.current = queueRef.current.slice(1);
 
           if (mountedRef.current) {
@@ -263,77 +334,236 @@ export const HandWorkScreen: React.FC = () => {
     }
   }, [playBeep, showErrorAndWait]);
 
-  // Добавление кода в очередь.
+  // Принимает одно завершённое сканирование.
   const handleSubmit = () => {
-    const trimmedCode = code.trim();
+    if (
+      showCustomAlert ||
+      showCompletionModal ||
+      isValidatingTask ||
+      isCompletingTask
+    ) {
+      return;
+    }
+
+    // Enter — только разделитель. Сам код берём из поля.
+    const trimmedCode = codeRef.current.trim();
 
     if (!trimmedCode) {
+      console.warn('[SCAN] Enter получен, поле пустое');
       return;
     }
 
-    if (!canScanRef.current) {
-      playBeep('error');
-
-      setAlertConfig({
-        title: '⚠️ Слишком быстро',
-        message: 'Подождите перед следующим сканированием',
-        type: 'error',
-      });
-
-      setShowCustomAlert(true);
-      setCode('');
-      inputRef.current?.focus();
-      return;
-    }
-
+    // Не теряем введённый код при заполненной очереди.
     if (queueRef.current.length >= MAX_QUEUE_SIZE) {
-      playBeep('error');
-
       setAlertConfig({
         title: '⚠️ Очередь переполнена',
-        message: 'Дождитесь обработки текущих запросов',
+        message: 'Код оставлен в поле. Дождитесь обработки текущих запросов.',
         type: 'error',
       });
 
       setShowCustomAlert(true);
-      setCode('');
-      inputRef.current?.focus();
       return;
     }
 
+    // Добавляем код в очередь синхронно.
     const updatedQueue = [...queueRef.current, trimmedCode];
 
     queueRef.current = updatedQueue;
     setRequestQueue(updatedQueue);
-    setCode('');
 
+    // Очищаем поле сразу после принятия кода.
+    clearCodeInput();
+
+    // Сохраняем фокус для следующего сканирования.
     inputRef.current?.focus();
 
-    canScanRef.current = false;
-
-    if (scanUnlockTimerRef.current) {
-      clearTimeout(scanUnlockTimerRef.current);
-    }
-
-    scanUnlockTimerRef.current = setTimeout(() => {
-      canScanRef.current = true;
-
-      if (mountedRef.current) {
-        inputRef.current?.focus();
-      }
-    }, SCAN_DELAY);
-
+    // Отправка идёт независимо от нового ввода.
     void processQueue();
   };
 
+  const renderFillProgress = (
+    label: string,
+    progress: AggregationResponse['smallBox'],
+  ) => {
+    if (progress === null) {
+      return null;
+    }
+
+    const fillPercent =
+      progress.limit > 0
+        ? Math.min(100, Math.max(0, (progress.current / progress.limit) * 100))
+        : 0;
+
+    const fillColor =
+      progress.current > progress.limit
+        ? '#DC2626'
+        : fillPercent >= 100
+        ? '#16A34A'
+        : '#007AFF';
+
+    return (
+      <View key={label} style={styles.fillProgressContainer}>
+        <View style={styles.fillProgressHeader}>
+          <Text style={styles.fillProgressLabel}>{label}</Text>
+
+          <Text
+            style={[
+              styles.fillProgressValue,
+              {
+                color: fillColor,
+              },
+            ]}
+          >
+            {progress.current} / {progress.limit}
+          </Text>
+        </View>
+
+        <View style={styles.fillProgressTrack}>
+          <View
+            style={[
+              styles.fillProgressBar,
+              {
+                width: `${fillPercent}%`,
+                backgroundColor: fillColor,
+              },
+            ]}
+          />
+        </View>
+
+        <Text style={styles.fillProgressPercent}>
+          {Math.round(fillPercent)}%
+        </Text>
+      </View>
+    );
+  };
+
+  // Проверка задания перед открытием окна результатов.
+  const handleOpenCompletion = async () => {
+    if (showCustomAlert || isValidatingTask || isCompletingTask) {
+      return;
+    }
+
+    const hasPendingScans =
+      queueRef.current.length > 0 ||
+      isProcessingRef.current ||
+      codeRef.current.trim().length > 0;
+
+    if (hasPendingScans) {
+      setAlertConfig({
+        title: 'Обработка не завершена',
+        message:
+          'Сначала отправьте введённый код и дождитесь обработки всех кодов из очереди.',
+        type: 'error',
+      });
+
+      setShowCustomAlert(true);
+      return;
+    }
+
+    setIsValidatingTask(true);
+
+    try {
+      const stats = await ApiService.validateTaskCompletion();
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setTaskPackagingStats(stats);
+      setShowCompletionModal(true);
+    } catch (error) {
+      console.error('Ошибка проверки задания:', error);
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setAlertConfig({
+        title: 'Ошибка проверки',
+        message: 'Не удалось получить результат проверки задания.',
+        type: 'error',
+      });
+
+      setShowCustomAlert(true);
+    } finally {
+      if (mountedRef.current) {
+        setIsValidatingTask(false);
+      }
+    }
+  };
+
+  // Завершение задания.
+  const handleCompleteTask = async () => {
+    if (isCompletingTask || isValidatingTask) {
+      return;
+    }
+
+    const hasPendingScans =
+      queueRef.current.length > 0 ||
+      isProcessingRef.current ||
+      codeRef.current.trim().length > 0;
+
+    if (hasPendingScans) {
+      setShowCompletionModal(false);
+
+      setAlertConfig({
+        title: 'Обработка не завершена',
+        message: 'Нельзя завершить задание, пока остаются необработанные коды.',
+        type: 'error',
+      });
+
+      setShowCustomAlert(true);
+      return;
+    }
+
+    setIsCompletingTask(true);
+
+    try {
+      await ApiService.completeTask();
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setShowCompletionModal(false);
+      onTaskCompleted();
+    } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
+
+      console.error('Ошибка завершения задания:', error);
+
+      setShowCompletionModal(false);
+
+      setAlertConfig({
+        title: 'Ошибка завершения',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Не удалось завершить задание.',
+        type: 'error',
+      });
+
+      setShowCustomAlert(true);
+    } finally {
+      if (mountedRef.current) {
+        setIsCompletingTask(false);
+      }
+    }
+  };
+
+  // Закрытие уведомления и возобновление очереди.
   const handleAlertClose = () => {
     setShowCustomAlert(false);
 
     const resolve = alertCloseResolverRef.current;
     alertCloseResolverRef.current = null;
+
     resolve?.();
   };
 
+  // Индикатор статуса сервера.
   const getServerStatusIcon = () => {
     switch (serverStatus) {
       case 'online':
@@ -350,13 +580,16 @@ export const HandWorkScreen: React.FC = () => {
   return (
     <View style={styles.modalContainer}>
       {/* Статус сервера */}
-      <View style={[styles.modalHeader, { paddingTop: 12 }]}>
+      <View
+        style={[
+          styles.modalHeader,
+          {
+            paddingTop: 12,
+          },
+        ]}
+      >
         <View style={styles.infoContainer}>
-          <TouchableOpacity
-            onPress={() => void pingServer()}
-            style={styles.serverInfoButton}
-            disabled={serverStatus === 'checking'}
-          >
+          <View style={styles.serverInfoButton}>
             <Text
               style={[
                 styles.serverInfoText,
@@ -366,7 +599,7 @@ export const HandWorkScreen: React.FC = () => {
             >
               {getServerStatusIcon()} Сервер: {serverUrl}
             </Text>
-          </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -382,7 +615,14 @@ export const HandWorkScreen: React.FC = () => {
 
         {requestQueue.length > 0 && (
           <View style={styles.infoContainer}>
-            <Text style={[styles.modalOperatorTitle, { color: '#FF9800' }]}>
+            <Text
+              style={[
+                styles.modalOperatorTitle,
+                {
+                  color: '#FF9800',
+                },
+              ]}
+            >
               📦 Запросов в очереди: {requestQueue.length}
               {isSubmitting ? ' · обработка' : ''}
             </Text>
@@ -400,7 +640,13 @@ export const HandWorkScreen: React.FC = () => {
           onPress={() => void handleOpenCompletion()}
           disabled={isValidatingTask}
         >
-          <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
+          <Text
+            style={{
+              color: '#fff',
+              fontSize: 14,
+              fontWeight: '600',
+            }}
+          >
             {isValidatingTask ? 'Проверка задания...' : 'Проверить задание'}
           </Text>
         </TouchableOpacity>
@@ -409,25 +655,37 @@ export const HandWorkScreen: React.FC = () => {
       {/* Поле сканирования */}
       <View style={styles.inputWrapper}>
         <TextInput
-          autoFocus
           ref={inputRef}
           style={styles.manualWorkInput}
           value={code}
-          onChangeText={setCode}
+          onChangeText={handleCodeChange}
           onSubmitEditing={handleSubmit}
           placeholder={
             requestQueue.length > 0
               ? `Очередь: ${requestQueue.length} | Введите код...`
-              : getExpectedScanLabel(expectedScan)
+              : `Введите код`
           }
           placeholderTextColor="#999"
           autoCapitalize="characters"
           autoCorrect={false}
           returnKeyType="done"
           submitBehavior="submit"
-          editable={requestQueue.length < MAX_QUEUE_SIZE}
+          editable={!isInputBlocked}
         />
       </View>
+      {(fillProgress.smallBox !== null ||
+        fillProgress.bigBox !== null ||
+        fillProgress.pallet !== null) && (
+        <View
+          style={{
+            marginTop: 4,
+          }}
+        >
+          {renderFillProgress('Малый короб', fillProgress.smallBox)}
+          {renderFillProgress('Большой короб', fillProgress.bigBox)}
+          {renderFillProgress('Палета', fillProgress.pallet)}
+        </View>
+      )}
 
       {/* Уведомления */}
       <CustomAlert
@@ -441,6 +699,8 @@ export const HandWorkScreen: React.FC = () => {
         visible={showCompletionModal}
         stats={taskPackagingStats}
         onClose={() => setShowCompletionModal(false)}
+        onComplete={handleCompleteTask}
+        isCompleting={isCompletingTask}
       />
     </View>
   );

@@ -1,5 +1,18 @@
 // src/services/api.ts
 import { Config } from '../config';
+import { ExpectedScanType } from '../screens/HandWorkScreen/expectedScan.ts';
+
+export interface AggregationPosition {
+  current: number;
+  limit: number;
+}
+
+export interface AggregationResponse {
+  smallBox: AggregationPosition | null;
+  bigBox: AggregationPosition | null;
+  pallet: AggregationPosition | null;
+  expectedScan: ExpectedScanType;
+}
 
 export class ApiService {
   private static async requestJson<T = any>(
@@ -62,49 +75,29 @@ export class ApiService {
       );
     } catch (error) {
       console.error('Ошибка поиска информации о товаре:', error);
-      return {
-        success: false,
-        message: this.errorMessage(error),
-      };
+      throw error;
     }
   }
 
-  static async handSave(code: string) {
+  static async handSave(code: string): Promise<AggregationResponse> {
     try {
       console.log(`Ручное сохранение кода: ${code}`);
-      const responseData = await this.requestJson<any>(
+
+      return await this.requestJson<AggregationResponse>(
         this.aggregationUrl(''),
         'POST',
         { code },
       );
-
-      const expectedScan =
-        typeof responseData === 'string'
-          ? responseData
-          : responseData?.expectedScan ??
-            responseData?.data?.expectedScan ??
-            null;
-
-      return {
-        success: true,
-        message: 'Код успешно обработан',
-        data: responseData,
-        expectedScan,
-      };
     } catch (error) {
       console.error('Ошибка обработки кода:', error);
-      return {
-        success: false,
-        message: this.errorMessage(error),
-        data: null,
-        expectedScan: null,
-      };
+      throw error;
     }
   }
 
   static async addCodeToBox(packageLabel: string, code: string) {
     try {
       console.log(`Добавление товара ${code} в упаковку ${packageLabel}`);
+
       return await this.requestJson(
         this.aggregationUrl('/add-product-into-package'),
         'POST',
@@ -112,84 +105,54 @@ export class ApiService {
       );
     } catch (error) {
       console.error('Ошибка добавления товара в упаковку:', error);
-      return {
-        success: false,
-        message: this.errorMessage(error),
-      };
+      throw error;
     }
   }
 
-  static async deleteCode(code: string) {
+  static async deleteCode(code: string): Promise<void> {
     try {
-      const data = await this.requestJson<any>(
-        this.aggregationUrl('/delete-code'),
-        'POST',
-        { code },
-      );
-
-      return {
-        success: true,
-        message: data?.message || 'Товар удалён',
-        data,
-      };
+      await this.requestJson(this.aggregationUrl('/delete-code'), 'POST', {
+        code,
+      });
     } catch (error) {
       console.error('Ошибка удаления товара:', error);
-      return {
-        success: false,
-        message: this.errorMessage(error),
-      };
+      throw error;
     }
   }
 
-  static async deletePackage(packageLabel: string) {
+  static async deletePackage(packageLabel: string): Promise<void> {
     try {
-      const data = await this.requestJson<any>(
-        this.aggregationUrl('/delete-package'),
-        'POST',
-        { packageLabel },
-      );
-
-      return {
-        success: true,
-        message: data?.message || 'Упаковка удалена',
-        data,
-      };
+      await this.requestJson(this.aggregationUrl('/delete-package'), 'POST', {
+        packageLabel,
+      });
     } catch (error) {
       console.error('Ошибка удаления упаковки:', error);
-      return {
-        success: false,
-        message: this.errorMessage(error),
-      };
+      throw error;
     }
   }
 
-  static async moveBox(boxLabel: string, palletLabel: string) {
+  static async moveBox(boxLabel: string, palletLabel: string): Promise<void> {
     try {
-      const data = await this.requestJson<any>(
-        this.aggregationUrl('/move-box'),
-        'POST',
-        { boxLabel, palletLabel },
-      );
-
-      if (data?.success === false) {
-        return {
-          success: false,
-          message: data?.message || 'Не удалось переместить коробку',
-          data,
-        };
-      }
-
-      return {
-        success: true,
-        message: data?.message || 'Коробка перемещена в паллету',
-        data,
-      };
+      await this.requestJson(this.aggregationUrl('/move-box'), 'POST', {
+        boxLabel,
+        palletLabel,
+      });
     } catch (error) {
       console.error('Ошибка перемещения коробки:', error);
-      return {
-        success: false,
-        message: this.errorMessage(error),
-      };
+      throw error;
+    }
+  }
+
+  static async getCurrentState(): Promise<AggregationResponse> {
+    try {
+
+      return await this.requestJson<AggregationResponse>(
+        this.aggregationUrl('/get-current-state'),
+        'GET',
+      );
+    } catch (error) {
+      console.error('Ошибка обработки кода:', error);
+      throw error;
     }
   }
 
@@ -282,18 +245,6 @@ export class ApiService {
     }
   }
 
-  static async completeTask() {
-    try {
-      return await this.requestJson(
-        this.taskUrl(`/tsd/${Config.TSD_ID}/complete`),
-        'POST',
-      );
-    } catch (error) {
-      console.error('Ошибка завершения задания:', error);
-      throw error;
-    }
-  }
-
   static async getActiveTask() {
     try {
       return await this.requestJson(
@@ -332,14 +283,41 @@ export class ApiService {
     }
   }
 
+
+  static async validateTaskCompletion() {
+    try {
+      return await this.requestJson(this.aggregationUrl('/getStats'));
+    } catch (error) {
+      console.error('Ошибка получения статистики агрегации:', error);
+      throw error;
+    }
+  }
+
+  static async completeTask() {
+    try {
+      return await this.requestJson(
+        this.taskUrl(`/${Config.TSD_ID}/complete`),
+        'POST',
+      );
+    } catch (error) {
+      console.error('Ошибка завершения задания:', error);
+      throw error;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Авторизация и выход
   // ---------------------------------------------------------------------------
 
-  static async authUser(username: string, password: string): Promise<object> {
+  static async authUser(
+    username: string,
+    password: string,
+    key: string,
+  ): Promise<object> {
     return this.requestJson<object>(`${Config.SERVER_URL}/users/auth`, 'POST', {
       username,
       password,
+      key,
     });
   }
 
@@ -351,15 +329,6 @@ export class ApiService {
       );
     } catch (error) {
       console.error('Ошибка выхода пользователя:', error);
-      throw error;
-    }
-  }
-
-  static async validateTaskCompletion() {
-    try {
-      return await this.requestJson(this.aggregationUrl('/getStats'));
-    } catch (error) {
-      console.error('Ошибка получения статистики агрегации:', error);
       throw error;
     }
   }

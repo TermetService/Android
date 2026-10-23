@@ -1,12 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+
+import { styles } from './TaskCompletionModal.styles';
 
 export interface ContainerFillStats {
   label: string;
@@ -39,7 +34,8 @@ interface TaskCompletionModalProps {
   visible: boolean;
   stats: TaskPackagingStats | null;
   onClose: () => void;
-  onComplete?: () => void;
+  onComplete: () => void | Promise<void>;
+  isCompleting?: boolean;
 }
 
 interface ExpandableSectionProps {
@@ -192,6 +188,7 @@ const ContainerItem: React.FC<ContainerItemProps> = ({ container, isLast }) => {
                     styles.codeRow,
                     index === productCodes.length - 1 && styles.itemLast,
                   ]}
+                  selectable
                 >
                   {code}
                 </Text>
@@ -209,27 +206,37 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
   stats,
   onClose,
   onComplete,
+  isCompleting = false,
 }) => {
-  const handleComplete = () => {
-    if (onComplete) {
-      onComplete();
-      return;
-    }
+  // Полные коды товаров с порядковыми номерами.
+  const renderProductCodes = (codes: string[]) => (
+    <View style={styles.productCodesList}>
+      {codes.map((code, index) => (
+        <View key={`${code}-${index}`} style={styles.codeItem}>
+          <Text style={styles.codeIndex}>{index + 1}.</Text>
 
-    // TODO: Подключить API завершения задания.
-    console.log('Завершение задания');
-  };
+          <Text style={styles.codeText} selectable>
+            {String(code ?? '')}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
 
-  const renderCodes = (codes: string[]) =>
-    codes.map((code, index) => (
-      <Text
-        key={`${code}-${index}`}
-        style={[styles.codeRow, index === codes.length - 1 && styles.itemLast]}
-      >
-        {code}
-      </Text>
-    ));
+  // Номера коробок без полного кода этикетки.
+  const renderPackageNumbers = (numbers: string[]) => (
+    <View style={styles.packageNumbersList}>
+      {numbers.map((number, index) => (
+        <View key={`${number}-${index}`} style={styles.packageNumberItem}>
+          <Text style={styles.packageNumberText} selectable>
+            № {number}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
 
+  // Отображение коробок и паллет с проблемами заполненности.
   const renderContainers = (containers: ContainerFillStats[]) =>
     containers.map((container, index) => (
       <ContainerItem
@@ -239,10 +246,128 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
       />
     ));
 
+  const invalidSmallBoxes =
+    stats?.smallBoxes.filter(
+      container => !container.isFull || container.isOverfilled,
+    ) ?? [];
+
+  const invalidBigBoxes =
+    stats?.bigBoxes.filter(
+      container => !container.isFull || container.isOverfilled,
+    ) ?? [];
+
+  const invalidPallets =
+    stats?.pallets.filter(
+      container => !container.isFull || container.isOverfilled,
+    ) ?? [];
+
+  // Отдельный рендеринг проблем комплектации.
+  const renderPackagingIssues = () => {
+    if (!stats) {
+      return null;
+    }
+
+    const hasProductsWithoutPackaging = stats.productsWithoutPackagingCount > 0;
+
+    const hasSmallBoxesWithoutBigBox = stats.smallBoxesWithoutBigBoxCount > 0;
+
+    const hasBigBoxesWithoutPallet = stats.bigBoxesWithoutPalletCount > 0;
+
+    if (
+      !hasProductsWithoutPackaging &&
+      !hasSmallBoxesWithoutBigBox &&
+      !hasBigBoxesWithoutPallet
+    ) {
+      return null;
+    }
+
+    return (
+      <>
+        <Text style={styles.groupTitle}>Проблемы комплектации</Text>
+
+        {hasProductsWithoutPackaging && (
+          <ExpandableSection
+            title="Товары без упаковки"
+            count={stats.productsWithoutPackagingCount}
+            hasIssues
+          >
+            {renderProductCodes(stats.productsWithoutPackaging)}
+          </ExpandableSection>
+        )}
+
+        {hasSmallBoxesWithoutBigBox && (
+          <ExpandableSection
+            title="Малые коробки без больших"
+            count={stats.smallBoxesWithoutBigBoxCount}
+            hasIssues
+          >
+            {renderPackageNumbers(stats.smallBoxesWithoutBigBox)}
+          </ExpandableSection>
+        )}
+
+        {hasBigBoxesWithoutPallet && (
+          <ExpandableSection
+            title="Большие коробки без паллет"
+            count={stats.bigBoxesWithoutPalletCount}
+            hasIssues
+          >
+            {renderPackageNumbers(stats.bigBoxesWithoutPallet)}
+          </ExpandableSection>
+        )}
+      </>
+    );
+  };
+
+  // Отдельный рендеринг проблем заполненности.
+  const renderFillIssues = () => {
+    const hasInvalidSmallBoxes = invalidSmallBoxes.length > 0;
+    const hasInvalidBigBoxes = invalidBigBoxes.length > 0;
+    const hasInvalidPallets = invalidPallets.length > 0;
+
+    if (!hasInvalidSmallBoxes && !hasInvalidBigBoxes && !hasInvalidPallets) {
+      return null;
+    }
+
+    return (
+      <>
+        <Text style={styles.groupTitle}>Проблемы с заполненностью</Text>
+
+        {hasInvalidSmallBoxes && (
+          <ExpandableSection
+            title="Малые коробки с проблемами"
+            count={invalidSmallBoxes.length}
+            hasIssues
+          >
+            {renderContainers(invalidSmallBoxes)}
+          </ExpandableSection>
+        )}
+
+        {hasInvalidBigBoxes && (
+          <ExpandableSection
+            title="Большие коробки с проблемами"
+            count={invalidBigBoxes.length}
+            hasIssues
+          >
+            {renderContainers(invalidBigBoxes)}
+          </ExpandableSection>
+        )}
+
+        {hasInvalidPallets && (
+          <ExpandableSection
+            title="Паллеты с проблемами"
+            count={invalidPallets.length}
+            hasIssues
+          >
+            {renderContainers(invalidPallets)}
+          </ExpandableSection>
+        )}
+      </>
+    );
+  };
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.modal}>
-        {/* Заголовок */}
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.title}>Проверка задания</Text>
@@ -257,7 +382,6 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Результат проверки */}
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.content}
@@ -278,7 +402,8 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
               <Text style={styles.resultTitle}>Проверка пройдена</Text>
 
               <Text style={styles.resultText}>
-                Упаковочные записи отсутствуют. Задание можно завершить.
+                Проблем с комплектацией и заполнением нет. Задание можно
+                завершить.
               </Text>
             </View>
           ) : (
@@ -289,332 +414,28 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
                 <Text style={styles.summaryValue}>{stats.totalRecords}</Text>
               </View>
 
-              <Text style={styles.groupTitle}>Проблемы комплектации</Text>
-
-              <ExpandableSection
-                title="Товары без упаковки"
-                count={stats.productsWithoutPackagingCount}
-                hasIssues
-                emptyText="Нет товаров без упаковки"
-              >
-                {renderCodes(stats.productsWithoutPackaging)}
-              </ExpandableSection>
-
-              <ExpandableSection
-                title="Малые коробки без больших"
-                count={stats.smallBoxesWithoutBigBoxCount}
-                hasIssues
-                emptyText="Нет малых коробок без больших"
-              >
-                {renderCodes(stats.smallBoxesWithoutBigBox)}
-              </ExpandableSection>
-
-              <ExpandableSection
-                title="Большие коробки без паллет"
-                count={stats.bigBoxesWithoutPalletCount}
-                hasIssues
-                emptyText="Нет больших коробок без паллет"
-              >
-                {renderCodes(stats.bigBoxesWithoutPallet)}
-              </ExpandableSection>
-
-              <Text style={styles.groupTitle}>Заполненность упаковок</Text>
-
-              <ExpandableSection
-                title="Малые коробки"
-                count={stats.smallBoxes.length}
-              >
-                {renderContainers(stats.smallBoxes)}
-              </ExpandableSection>
-
-              <ExpandableSection
-                title="Большие коробки"
-                count={stats.bigBoxes.length}
-              >
-                {renderContainers(stats.bigBoxes)}
-              </ExpandableSection>
-
-              <ExpandableSection title="Паллеты" count={stats.pallets.length}>
-                {renderContainers(stats.pallets)}
-              </ExpandableSection>
+              {renderPackagingIssues()}
+              {renderFillIssues()}
             </>
           )}
         </ScrollView>
 
-        {/* Кнопка всегда доступна */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={styles.completeButton}
-            onPress={handleComplete}
+            style={[
+              styles.completeButton,
+              isCompleting && styles.disabledButton,
+            ]}
+            onPress={() => void onComplete()}
+            disabled={isCompleting}
             activeOpacity={0.7}
           >
-            <Text style={styles.buttonText}>Завершить задание</Text>
+            <Text style={styles.buttonText}>
+              {isCompleting ? 'Завершение...' : 'Завершить задание'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
     </Modal>
   );
 };
-
-const styles = StyleSheet.create({
-  modal: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: '#fff',
-    paddingTop: 12,
-    paddingHorizontal: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
-  },
-  headerText: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  title: {
-    color: '#222',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  subtitle: {
-    color: '#666',
-    fontSize: 13,
-    lineHeight: 17,
-    marginTop: 2,
-  },
-  headerCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCloseText: {
-    color: '#333',
-    fontSize: 22,
-    fontWeight: '600',
-  },
-  scrollView: {
-    flex: 1,
-    marginTop: 8,
-  },
-  content: {
-    paddingBottom: 10,
-  },
-  summary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    color: '#555',
-    fontSize: 13,
-  },
-  summaryValue: {
-    color: '#222',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  groupTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#222',
-    marginTop: 5,
-    marginBottom: 7,
-  },
-  section: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    marginBottom: 6,
-    overflow: 'hidden',
-  },
-  sectionHeader: {
-    minHeight: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: '#f7f7f7',
-  },
-  sectionHeaderText: {
-    flex: 1,
-    color: '#222',
-    fontSize: 13,
-    fontWeight: '600',
-    paddingRight: 6,
-  },
-  countBadge: {
-    minWidth: 26,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 10,
-    backgroundColor: '#e8e8e8',
-    alignItems: 'center',
-  },
-  countBadgeError: {
-    backgroundColor: '#ffebe9',
-  },
-  countText: {
-    color: '#444',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  countTextError: {
-    color: '#d93025',
-  },
-  expandIcon: {
-    width: 20,
-    textAlign: 'right',
-    marginLeft: 6,
-    color: '#666',
-    fontSize: 17,
-  },
-  sectionBody: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#fff',
-  },
-  codeRow: {
-    color: '#333',
-    fontSize: 13,
-    paddingVertical: 7,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e5e5',
-  },
-  itemLast: {
-    borderBottomWidth: 0,
-  },
-  containerItem: {
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e5e5',
-  },
-  containerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  itemLabel: {
-    flex: 1,
-    color: '#333',
-    fontSize: 13,
-    paddingRight: 8,
-  },
-  itemValue: {
-    color: '#222',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  progressTrack: {
-    height: 4,
-    backgroundColor: '#e8e8e8',
-    borderRadius: 2,
-    overflow: 'hidden',
-    marginTop: 6,
-  },
-  progressFillBase: {
-    height: 4,
-    borderRadius: 2,
-  },
-  progressFill: {
-    backgroundColor: '#218838',
-  },
-  progressFillIncomplete: {
-    backgroundColor: '#e0a126',
-  },
-  progressFillOverfilled: {
-    backgroundColor: '#d93025',
-  },
-  fillStatus: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  fillStatusFull: {
-    color: '#218838',
-  },
-  fillStatusIncomplete: {
-    color: '#b7791f',
-  },
-  fillStatusOverfilled: {
-    color: '#d93025',
-  },
-  contentsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 7,
-  },
-  contentsButtonText: {
-    fontSize: 12,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  contentsList: {
-    marginTop: 4,
-    paddingLeft: 8,
-    borderLeftWidth: 2,
-    borderLeftColor: '#e5e5e5',
-  },
-  emptyText: {
-    color: '#218838',
-    fontSize: 12,
-    paddingVertical: 5,
-  },
-  result: {
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-    backgroundColor: '#edf7ed',
-  },
-  resultTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#218838',
-  },
-  resultTitleError: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#a15c00',
-  },
-  resultText: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#555',
-    marginTop: 3,
-  },
-  footer: {
-    paddingTop: 8,
-    paddingBottom: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e5e5',
-    backgroundColor: '#fff',
-  },
-  completeButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-});

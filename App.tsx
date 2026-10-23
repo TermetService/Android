@@ -55,6 +55,11 @@ const App = () => {
     }
   };
 
+  const handleTaskCompleted = () => {
+    setTaskId(null);
+    setCurrentScreen(Pages.TaskSelection);
+  };
+
   const menuItems: MenuItem[] = [
     {
       id: 'tasks',
@@ -93,7 +98,7 @@ const App = () => {
 
       case Pages.HandWork:
         return taskId !== null ? (
-          <HandWorkScreen />
+          <HandWorkScreen onTaskCompleted={handleTaskCompleted} />
         ) : (
           <TaskSelectionScreen onTaskSelected={handleTaskSelected} />
         );
