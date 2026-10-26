@@ -2,6 +2,18 @@
 import { Config } from '../config';
 import type { ExpectedScanType } from '../types/aggregation';
 
+const NETWORK_ERROR_MESSAGE =
+  'Нет соединения с сервером. Проверьте подключение.';
+const SERVER_ERROR_MESSAGE =
+  'Сервер временно недоступен. Попробуйте позже.';
+const DEFAULT_ERROR_MESSAGE =
+  'Не удалось выполнить запрос. Попробуйте позже.';
+
+const NETWORK_ERROR_PATTERN =
+  /network\s*error|failed to fetch|network request failed|ошибка сети|econn|enotfound|timeout/i;
+const SERVER_ERROR_PATTERN =
+  /\b5\d{2}\b|internal server error|bad gateway|service unavailable|gateway timeout/i;
+
 export interface AggregationPosition {
   current: number;
   limit: number;
@@ -15,21 +27,114 @@ export interface AggregationResponse {
 }
 
 export class ApiService {
+  private static async request(
+    url: string,
+    method: 'GET' | 'POST' | 'PUT' = 'GET',
+    body?: unknown,
+  ): Promise<Response> {
+    let response: Response;
+
+    try {
+      response = await fetch(url, {
+        method,
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+    } catch (error) {
+      console.error('Сетевая ошибка запроса:', error);
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+
+    if (response.status === 0) {
+      console.error('Сервер не вернул HTTP-статус:', url);
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+
+    if (response.status >= 500) {
+      console.error(`Сервер вернул ошибку ${response.status}: ${url}`);
+      throw new Error(SERVER_ERROR_MESSAGE);
+    }
+
+    return response;
+  }
+
+  private static normalizeMessage(message: unknown): string {
+    const text = Array.isArray(message)
+      ? message.join('\n')
+      : typeof message === 'string'
+      ? message.trim()
+      : '';
+
+    if (!text) {
+      return DEFAULT_ERROR_MESSAGE;
+    }
+
+    if (/<html|<!doctype/i.test(text)) {
+      return DEFAULT_ERROR_MESSAGE;
+    }
+
+    if (NETWORK_ERROR_PATTERN.test(text)) {
+      return NETWORK_ERROR_MESSAGE;
+    }
+
+    if (SERVER_ERROR_PATTERN.test(text)) {
+      return SERVER_ERROR_MESSAGE;
+    }
+
+    return text;
+  }
+
+  private static async requestPrint(
+    url: string,
+    body: unknown,
+  ): Promise<Response> {
+    const response = await this.request(url, 'POST', body);
+
+    if (!response.ok) {
+      let responseText = '';
+
+      try {
+        responseText = await response.text();
+      } catch (error) {
+        console.error('Ошибка чтения ответа сервера:', error);
+        throw new Error(NETWORK_ERROR_MESSAGE);
+      }
+
+      let message: unknown = responseText;
+
+      try {
+        const responseData = responseText ? JSON.parse(responseText) : null;
+        message =
+          responseData?.message ?? responseData?.error ?? responseText;
+      } catch {
+        // Сервер вернул не JSON — используем текст как сообщение.
+      }
+
+      throw new Error(this.normalizeMessage(message));
+    }
+
+    return response;
+  }
+
   private static async requestJson<T = any>(
     url: string,
     method: 'GET' | 'POST' | 'PUT' = 'GET',
     body?: unknown,
   ): Promise<T> {
-    const response = await fetch(url, {
-      method,
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
+    const response = await this.request(url, method, body);
 
-    const responseText = await response.text();
+    let responseText: string;
+
+    try {
+      responseText = await response.text();
+    } catch (error) {
+      console.error('Ошибка чтения ответа сервера:', error);
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+
     let responseData: any = null;
 
     try {
@@ -39,12 +144,8 @@ export class ApiService {
     }
 
     if (!response.ok) {
-      const message = responseData?.message || responseData?.error;
-      throw new Error(
-        Array.isArray(message)
-          ? message.join('\n')
-          : String(message || `Ошибка HTTP: ${response.status}`),
-      );
+      const message = responseData?.message ?? responseData?.error;
+      throw new Error(this.normalizeMessage(message));
     }
 
     return responseData as T;
@@ -56,10 +157,6 @@ export class ApiService {
 
   private static taskUrl(path: string): string {
     return `${Config.SERVER_URL}/task${path}`;
-  }
-
-  private static errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : 'Неизвестная ошибка';
   }
 
   // ---------------------------------------------------------------------------
@@ -161,51 +258,24 @@ export class ApiService {
   // ---------------------------------------------------------------------------
 
   static async PrintSmallBox(boxNumber: number, taskId: number) {
-    try {
-      return await fetch(`${Config.SERVER_URL}/printer/print-box`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ boxNumber, taskId }),
-      });
-    } catch (error) {
-      console.error('Ошибка печати этикетки малой коробки:', error);
-      throw error;
-    }
+    return this.requestPrint(`${Config.SERVER_URL}/printer/print-box`, {
+      boxNumber,
+      taskId,
+    });
   }
 
   static async PrintBox(boxNumber: number, taskId: number) {
-    try {
-      return await fetch(`${Config.SERVER_URL}/printer/print-box`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ boxNumber, taskId }),
-      });
-    } catch (error) {
-      console.error('Ошибка печати этикетки большой коробки:', error);
-      throw error;
-    }
+    return this.requestPrint(`${Config.SERVER_URL}/printer/print-box`, {
+      boxNumber,
+      taskId,
+    });
   }
 
   static async PrintPallet(palletNumber: number, taskId: number) {
-    try {
-      return await fetch(`${Config.SERVER_URL}/printer/print-pallet`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ palletNumber, taskId }),
-      });
-    } catch (error) {
-      console.error('Ошибка печати этикетки паллеты:', error);
-      throw error;
-    }
+    return this.requestPrint(`${Config.SERVER_URL}/printer/print-pallet`, {
+      palletNumber,
+      taskId,
+    });
   }
 
   // ---------------------------------------------------------------------------
