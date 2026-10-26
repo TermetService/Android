@@ -1,6 +1,6 @@
 // src/services/api.ts
 import { Config } from '../config';
-import { ExpectedScanType } from '../screens/HandWorkScreen/expectedScan.ts';
+import type { ExpectedScanType } from '../types/aggregation';
 
 export interface AggregationPosition {
   current: number;
@@ -131,11 +131,11 @@ export class ApiService {
     }
   }
 
-  static async moveBox(boxLabel: string, palletLabel: string): Promise<void> {
+  static async moveBox(innerLabel: string, outerLabel: string): Promise<void> {
     try {
       await this.requestJson(this.aggregationUrl('/move-box'), 'POST', {
-        boxLabel,
-        palletLabel,
+        innerLabel,
+        outerLabel,
       });
     } catch (error) {
       console.error('Ошибка перемещения коробки:', error);

@@ -1,6 +1,6 @@
-import { StyleSheet, Platform, Dimensions } from 'react-native';
+import { StyleSheet, Dimensions } from 'react-native';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export const styles = StyleSheet.create({
   overlay: {
@@ -48,6 +48,20 @@ export const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 24,
     alignItems: 'center',
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    flex: 1,
+  },
+  cancelButton: {
+    marginRight: 10,
+    backgroundColor: '#8E8E93',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   successButton: {
     backgroundColor: '#34C759',

@@ -1,16 +1,7 @@
 // src/components/CustomAlert.tsx
-import React, { useEffect } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Modal, View, Text, TouchableOpacity } from 'react-native';
 import { styles } from './styles';
-
-const { width } = Dimensions.get('window');
 
 interface CustomAlertProps {
   visible: boolean;
@@ -19,6 +10,10 @@ interface CustomAlertProps {
   type: 'success' | 'error';
   onClose: () => void;
   autoCloseTime?: number; // время авто-закрытия в мс
+  closeDelay?: number; // задержка перед возможностью подтвердить/закрыть (в мс)
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: () => void;
 }
 
 export const CustomAlert: React.FC<CustomAlertProps> = ({
@@ -28,47 +23,133 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   type,
   onClose,
   autoCloseTime,
+  closeDelay = 0,
+  confirmText = 'Подтвердить',
+  cancelText = 'Отмена',
+  onConfirm,
 }) => {
-  // Автоматическое закрытие
+  const [canClose, setCanClose] = useState(closeDelay === 0);
+  const isConfirmation = Boolean(onConfirm);
+
+  // Сброс/установка блокировки при каждом открытии
   useEffect(() => {
-    if (visible && autoCloseTime && type === 'success') {
-      const timer = setTimeout(() => {
-        onClose();
-      }, autoCloseTime);
-      
-      return () => clearTimeout(timer);
+    if (!visible) {
+      setCanClose(closeDelay === 0);
+      return;
     }
-  }, [visible, autoCloseTime, type, onClose]);
+
+    if (closeDelay > 0) {
+      setCanClose(false);
+      const delayTimer = setTimeout(() => {
+        setCanClose(true);
+      }, closeDelay);
+
+      return () => clearTimeout(delayTimer);
+    } else {
+      setCanClose(true);
+    }
+  }, [visible, closeDelay]);
+
+  // Автоматическое закрытие (стартует только после задержки)
+  useEffect(() => {
+    if (!visible || !canClose || isConfirmation) return;
+    if (!autoCloseTime || type !== 'success') return;
+
+    const timer = setTimeout(() => {
+      onClose();
+    }, autoCloseTime);
+
+    return () => clearTimeout(timer);
+  }, [
+    visible,
+    canClose,
+    autoCloseTime,
+    type,
+    onClose,
+    isConfirmation,
+  ]);
+
+  const handleClose = () => {
+    // В режиме подтверждения отмена доступна сразу.
+    if (!canClose && !isConfirmation) return;
+    onClose();
+  };
+
+  const handleConfirm = () => {
+    if (!canClose || !onConfirm) return;
+    onConfirm();
+  };
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
-        <View style={[
-          styles.alertContainer,
-          type === 'success' ? styles.successAlert : styles.errorAlert
-        ]}>
+        <View
+          style={[
+            styles.alertContainer,
+            type === 'success' ? styles.successAlert : styles.errorAlert,
+          ]}
+        >
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
-          
-          <TouchableOpacity
-            style={[
-              styles.button,
-              type === 'success' ? styles.successButton : styles.errorButton
-            ]}
-            onPress={onClose}
-          >
-            <Text style={styles.buttonText}>
-              {type === 'success' ? 'OK' : 'Ошибка'}
-            </Text>
-          </TouchableOpacity>
+
+          {isConfirmation ? (
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  styles.actionButton,
+                  styles.cancelButton,
+                ]}
+                onPress={handleClose}
+              >
+                <Text style={styles.buttonText}>{cancelText}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                disabled={!canClose}
+                style={[
+                  styles.button,
+                  styles.actionButton,
+                  type === 'success'
+                    ? styles.successButton
+                    : styles.errorButton,
+                  !canClose && styles.buttonDisabled,
+                ]}
+                onPress={handleConfirm}
+              >
+                <Text style={styles.buttonText}>
+                  {canClose ? confirmText : 'Подождите...'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              disabled={!canClose}
+              style={[
+                styles.button,
+                type === 'success'
+                  ? styles.successButton
+                  : styles.errorButton,
+                !canClose && styles.buttonDisabled,
+              ]}
+              onPress={handleClose}
+            >
+              <Text style={styles.buttonText}>
+                {canClose
+                  ? type === 'success'
+                    ? 'OK'
+                    : 'Ошибка'
+                  : 'Подождите...'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
   );
 };
-

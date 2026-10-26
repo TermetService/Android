@@ -1,13 +1,19 @@
 // src/hooks/useCustomAlert.ts
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 interface AlertOptions {
   title: string;
   message: string;
   type: 'success' | 'error';
   autoCloseTime?: number;
+  closeDelay?: number;
+  confirmText?: string;
+  cancelText?: string;
   onClose?: () => void;
+  onConfirm?: () => void;
 }
+
+export type { AlertOptions };
 
 export const useCustomAlert = () => {
   const [alertVisible, setAlertVisible] = useState(false);
@@ -17,22 +23,27 @@ export const useCustomAlert = () => {
     type: 'success',
   });
 
-  const showAlert = (options: AlertOptions) => {
+  const showAlert = useCallback((options: AlertOptions) => {
     setAlertOptions(options);
     setAlertVisible(true);
-  };
+  }, []);
 
-  const hideAlert = () => {
+  const closeAlert = useCallback(() => {
     setAlertVisible(false);
-    if (alertOptions.onClose) {
-      alertOptions.onClose();
-    }
-  };
+  }, []);
+
+  const onClose = alertOptions.onClose;
+
+  const hideAlert = useCallback(() => {
+    closeAlert();
+    onClose?.();
+  }, [closeAlert, onClose]);
 
   return {
-    showAlert,
-    hideAlert,
-    alertVisible,
     alertOptions,
+    alertVisible,
+    closeAlert,
+    hideAlert,
+    showAlert,
   };
 };
