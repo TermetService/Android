@@ -12,15 +12,20 @@ interface SearchStatusBannerProps {
 export const SearchStatusBanner: React.FC<SearchStatusBannerProps> = ({
   message,
   statusType,
-}) => (
-  <View
-    style={[
-      styles.resultContainer,
-      statusType === 'success' && styles.resultSuccess,
-      statusType === 'error' && styles.resultError,
-      statusType === 'info' && styles.resultInfo,
-    ]}
-  >
-    <Text style={styles.resultMessage}>{message}</Text>
-  </View>
-);
+}) => {
+  if (!message.trim() || statusType === 'success') {
+    return null;
+  }
+
+  return (
+    <View
+      style={[
+        styles.resultContainer,
+        statusType === 'error' && styles.resultError,
+        statusType === 'info' && styles.resultInfo,
+      ]}
+    >
+      <Text style={styles.resultMessage}>{message}</Text>
+    </View>
+  );
+};

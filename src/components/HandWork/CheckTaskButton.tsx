@@ -14,8 +14,8 @@ export const CheckTaskButton: React.FC<CheckTaskButtonProps> = ({
     style={{
       backgroundColor: '#007AFF',
       borderRadius: 8,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
+      paddingVertical: 15,
+      paddingHorizontal: 17,
       alignItems: 'center',
       marginTop: 10,
     }}
@@ -25,7 +25,7 @@ export const CheckTaskButton: React.FC<CheckTaskButtonProps> = ({
     <Text
       style={{
         color: '#fff',
-        fontSize: 14,
+        fontSize: 20,
         fontWeight: '600',
       }}
     >

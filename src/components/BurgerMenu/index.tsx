@@ -17,7 +17,7 @@ interface HeaderProps {
   title: string;
   menuItems: MenuItem[];
   showMenu?: boolean;
-  tsd_id?: number;
+  userName?: string;
   onLogout: () => void;
 }
 
@@ -25,7 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   title,
   menuItems,
   showMenu = true,
-  tsd_id,
+  userName,
   onLogout,
 }) => {
   return (
@@ -36,7 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
         {title}
       </Text>
 
-      {tsd_id !== undefined && <Text style={styles.tsdId}>ТСД: {tsd_id}</Text>}
+      {userName !== undefined && <Text style={styles.tsdId}>{userName}</Text>}
 
       <TouchableOpacity
         style={styles.logoutButton}

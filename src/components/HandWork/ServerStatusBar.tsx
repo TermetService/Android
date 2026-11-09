@@ -7,6 +7,7 @@ import type { ServerStatus } from '../../types/handWork';
 interface ServerStatusBarProps {
   status: ServerStatus;
   serverUrl: string;
+  onPress?: () => void;
 }
 
 const getServerStatusIcon = (status: ServerStatus): string => {
@@ -25,22 +26,28 @@ const getServerStatusIcon = (status: ServerStatus): string => {
 export const ServerStatusBar: React.FC<ServerStatusBarProps> = ({
   status,
   serverUrl,
+  onPress,
 }) => (
-  <TouchableOpacity>
+  <TouchableOpacity
+    onPress={onPress}
+    disabled={status === 'checking'}
+    accessibilityRole="button"
+    accessibilityLabel="Проверить доступность сервера"
+  >
     <View style={[styles.modalHeader, { paddingTop: 12 }]}>
-    <View style={styles.infoContainer}>
-      <View style={styles.serverInfoButton}>
-        <Text
-          style={[
-            styles.serverInfoText,
-            status === 'offline' && styles.serverInfoTextOffline,
-            status === 'online' && styles.serverInfoTextOnline,
-          ]}
-        >
-          {getServerStatusIcon(status)} Сервер: {serverUrl}
-        </Text>
+      <View style={styles.infoContainer}>
+        <View style={styles.serverInfoButton}>
+          <Text
+            style={[
+              styles.serverInfoText,
+              status === 'offline' && styles.serverInfoTextOffline,
+              status === 'online' && styles.serverInfoTextOnline,
+            ]}
+          >
+            {getServerStatusIcon(status)} Сервер: {serverUrl}
+          </Text>
+        </View>
       </View>
     </View>
-  </View>
-</TouchableOpacity>
+  </TouchableOpacity>
 );

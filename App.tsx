@@ -116,7 +116,7 @@ const App = () => {
             title={screenTitles[currentScreen]}
             menuItems={menuItems}
             showMenu={currentScreen !== Pages.TaskSelection}
-            tsd_id={Config.TSD_ID}
+            userName={authenticatedUser.username}
             onLogout={handleLogout}
           />
 

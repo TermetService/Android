@@ -13,6 +13,7 @@ import { ServerStatusBar } from './ServerStatusBar';
 import { styles } from './styles';
 
 export const HandWorkScreenView: React.FC<HandWorkScreenModel> = ({
+  alertId,
   alertOptions,
   alertVisible,
   closeCompletionModal,
@@ -34,15 +35,23 @@ export const HandWorkScreenView: React.FC<HandWorkScreenModel> = ({
   serverUrl,
   showCompletionModal,
   taskPackagingStats,
+  pingServer,
 }) => {
   const inputPlaceholder =
     requestQueue.length > 0
       ? `Очередь: ${requestQueue.length} | Введите код...`
-      : 'Введите код';
+      : 'Ожидание сканирования...';
 
   return (
     <View style={styles.modalContainer}>
-      <ServerStatusBar status={serverStatus} serverUrl={serverUrl} />
+      <ServerStatusBar
+        status={serverStatus}
+        serverUrl={serverUrl}
+        onPress={() => {
+          pingServer();
+          inputRef.current?.focus();
+        }}
+      />
 
       <View style={styles.contentArea}>
         <ExpectedScanCard expectedScan={expectedScan} />
@@ -54,24 +63,28 @@ export const HandWorkScreenView: React.FC<HandWorkScreenModel> = ({
           />
         )}
 
+        <ScanInput
+          inputRef={inputRef}
+          value={code}
+          placeholder={inputPlaceholder}
+          editable={!isInputBlocked}
+          onChangeText={handleCodeChange}
+          onSubmit={handleSubmit}
+        />
+
+        <FillProgressPanel
+          progress={fillProgress}
+          expectedScan={expectedScan}
+        />
+
         <CheckTaskButton
           isValidating={isValidatingTask}
           onPress={() => void handleOpenCompletion()}
         />
       </View>
 
-      <ScanInput
-        inputRef={inputRef}
-        value={code}
-        placeholder={inputPlaceholder}
-        editable={!isInputBlocked}
-        onChangeText={handleCodeChange}
-        onSubmit={handleSubmit}
-      />
-
-      <FillProgressPanel progress={fillProgress} />
-
       <CustomAlert
+        key={alertId}
         visible={alertVisible}
         title={alertOptions.title}
         message={alertOptions.message}

@@ -78,7 +78,7 @@ summaryLabel: {
 
 summaryValue: {
     color: '#222',
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
 },
 

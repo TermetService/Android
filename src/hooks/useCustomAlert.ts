@@ -17,6 +17,7 @@ export type { AlertOptions };
 
 export const useCustomAlert = () => {
   const [alertVisible, setAlertVisible] = useState(false);
+  const [alertId, setAlertId] = useState(0);
   const [alertOptions, setAlertOptions] = useState<AlertOptions>({
     title: '',
     message: '',
@@ -26,6 +27,7 @@ export const useCustomAlert = () => {
   const showAlert = useCallback((options: AlertOptions) => {
     setAlertOptions(options);
     setAlertVisible(true);
+    setAlertId(previous => previous + 1);
   }, []);
 
   const closeAlert = useCallback(() => {
@@ -40,6 +42,7 @@ export const useCustomAlert = () => {
   }, [closeAlert, onClose]);
 
   return {
+    alertId,
     alertOptions,
     alertVisible,
     closeAlert,

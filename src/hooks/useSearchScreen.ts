@@ -4,7 +4,6 @@ import type { TextInput } from 'react-native';
 import { ApiService } from '../services/api';
 import type { AggregationInfo } from '../types/aggregation';
 import {
-  DEFAULT_STATUS_MESSAGE,
   getAvailableParents,
 } from '../utils/search';
 import type { SearchStatusType } from '../utils/search';
@@ -12,7 +11,7 @@ import type { SearchStatusType } from '../utils/search';
 export const useSearchScreen = () => {
   const [inputValue, setInputValue] = useState('');
   const [scanResult, setScanResult] = useState<AggregationInfo | null>(null);
-  const [statusMessage, setStatusMessage] = useState(DEFAULT_STATUS_MESSAGE);
+  const [statusMessage, setStatusMessage] = useState('');
   const [statusType, setStatusType] = useState<SearchStatusType>('info');
   const [isLoading, setIsLoading] = useState(false);
   const [showActionsModal, setShowActionsModal] = useState(false);
@@ -27,7 +26,7 @@ export const useSearchScreen = () => {
   const clearAllStates = () => {
     setInputValue('');
     setScanResult(null);
-    setStatusMessage(DEFAULT_STATUS_MESSAGE);
+    setStatusMessage('');
     setStatusType('info');
     setShowActionsModal(false);
     setScanKey(previous => previous + 1);

@@ -55,6 +55,9 @@ export const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+    height: 65,
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   cancelButton: {
     marginRight: 10,
@@ -71,7 +74,8 @@ export const styles = StyleSheet.create({
   },
   buttonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 15,
+    textAlign: 'center',
     fontWeight: '600',
   },
 });

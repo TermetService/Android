@@ -386,9 +386,9 @@ export const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
           ) : (
             <>
               <View style={styles.summary}>
-                <Text style={styles.summaryLabel}>Всего продуктов</Text>
+                <Text style={styles.summaryLabel}>Продуктов отсканировано</Text>
 
-                <Text style={styles.summaryValue}>{stats.totalRecords}</Text>
+                <Text style={styles.summaryValue}>{` ${stats.totalRecords} из ${stats.requiredRecords }`}</Text>
               </View>
 
               {renderPackagingIssues()}

@@ -9,14 +9,26 @@ interface ExpectedScanCardProps {
   expectedScan: ExpectedScanType | null;
 }
 
+const getScanColor = (expectedScan: ExpectedScanType | null): string => {
+  if (expectedScan === 'PRODUCT') {
+    return '#2563EB';
+  }
+
+  return '#D97706';
+};
+
 export const ExpectedScanCard: React.FC<ExpectedScanCardProps> = ({
   expectedScan,
-}) => (
-  <View style={styles.expectedScanContainer}>
-    <Text style={styles.expectedScanTitle}>Следующее сканирование</Text>
+}) => {
+  const scanColor = getScanColor(expectedScan);
 
-    <Text style={styles.expectedScanValue}>
-      {getExpectedScanLabel(expectedScan)}
-    </Text>
-  </View>
-);
+  return (
+    <View
+      style={[styles.expectedScanContainer, { borderLeftColor: scanColor }]}
+    >
+      <Text style={[styles.expectedScanValue, { color: scanColor }]}>
+        {getExpectedScanLabel(expectedScan)}
+      </Text>
+    </View>
+  );
+};

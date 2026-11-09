@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ApiService } from '../services/api';
 import type {
@@ -21,7 +21,7 @@ interface UseSearchActionsModalOptions {
   onRefresh: (updated: AggregationInfo) => void;
 }
 
-const DELETE_CONFIRMATION_DELAY = 2000;
+const CONFIRMATION_DELAY = 2000;
 
 export const useSearchActionsModal = ({
   scanResult,
@@ -58,6 +58,46 @@ export const useSearchActionsModal = ({
   const currentObjectCode = scanResult.label?.trim() ?? '';
 
   const actionTargets = getActionTargets(scanResult);
+  const confirmationOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (!alertVisible) {
+      confirmationOpenRef.current = false;
+    }
+  }, [alertVisible]);
+
+  const showActionConfirmation = ({
+    title,
+    message,
+    confirmText,
+    onConfirm,
+    delay,
+  }: {
+    title: string;
+    message: string;
+    confirmText: string;
+    onConfirm: () => void;
+    delay?: number;
+  }) => {
+    if (alertVisible || confirmationOpenRef.current) {
+      return;
+    }
+
+    confirmationOpenRef.current = true;
+
+    showAlert({
+      title,
+      message,
+      type: 'error',
+      closeDelay: delay ?? CONFIRMATION_DELAY,
+      confirmText,
+      cancelText: 'Отмена',
+      onConfirm: () => {
+        closeAlert();
+        onConfirm();
+      },
+    });
+  };
 
   const deleteActionTarget = async (target: ActionTarget) => {
     if (!target.code) {
@@ -109,15 +149,11 @@ export const useSearchActionsModal = ({
       return;
     }
 
-    showAlert({
+    showActionConfirmation({
       title: 'Подтверждение удаления',
       message: getDeleteConfirmationMessage(target),
-      type: 'error',
-      closeDelay: DELETE_CONFIRMATION_DELAY,
       confirmText: 'Удалить',
-      cancelText: 'Отмена',
       onConfirm: () => {
-        closeAlert();
         void deleteActionTarget(target);
       },
     });
@@ -158,6 +194,28 @@ export const useSearchActionsModal = ({
     } finally {
       setIsMovingBox(false);
     }
+  };
+
+  const confirmMoveBox = (target: ActionTarget) => {
+    const destinationCode = outerCode.trim();
+
+    if (isMovingBox || !target.code || !destinationCode) {
+      return;
+    }
+
+    const destination =
+      target.scanType === 'SMALL_BOX_LABEL' ? 'в коробку' : 'на паллету';
+
+    showActionConfirmation({
+      title: 'Подтверждение перемещения',
+      message: `Переместить ${getActionTargetName(
+        target,
+      )} ${destination} ${destinationCode}`,
+      confirmText: 'Переместить',
+      onConfirm: () => {
+        void moveBox(target.code);
+      },
+    });
   };
 
   const addProductToPackage = async (packageCode: string) => {
@@ -216,6 +274,33 @@ export const useSearchActionsModal = ({
     } finally {
       setIsAddingContent(false);
     }
+  };
+
+  const confirmAddProduct = (target: ActionTarget) => {
+    const productCode = contentCode.trim();
+
+    if (
+      !target.code ||
+      !productCode ||
+      isAddingContent ||
+      isDeleting ||
+      isMovingBox ||
+      printingType !== null
+    ) {
+      return;
+    }
+
+    showActionConfirmation({
+      title: 'Подтверждение добавления',
+      message: `Добавить товар в ${getActionTargetName(
+        target,
+      )}?`,
+      delay: 0,
+      confirmText: 'Добавить',
+      onConfirm: () => {
+        void addProductToPackage(target.code);
+      },
+    });
   };
 
   const printTarget = async (target: ActionTarget) => {
@@ -282,6 +367,8 @@ export const useSearchActionsModal = ({
   const startAddingProduct = (packageCode: string) => {
     setContentCode('');
     setAddingToPackageCode(packageCode);
+    setOuterCode('');
+    setMovingCode(null);
   };
 
   const cancelAddingProduct = () => {
@@ -292,6 +379,8 @@ export const useSearchActionsModal = ({
   const startMovingBox = (boxCode: string) => {
     setOuterCode('');
     setMovingCode(boxCode);
+    setContentCode('');
+    setAddingToPackageCode(null);
   };
 
   const cancelMovingBox = () => {
@@ -307,7 +396,9 @@ export const useSearchActionsModal = ({
     alertVisible,
     cancelAddingProduct,
     cancelMovingBox,
+    confirmAddProduct,
     confirmDelete,
+    confirmMoveBox,
     contentCode,
     hideAlert,
     isAddingContent,

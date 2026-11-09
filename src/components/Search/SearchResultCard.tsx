@@ -35,20 +35,15 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
   onClear,
 }) => (
   <View style={styles.infoCard}>
-    <Text style={styles.sectionTitle}>{scanTypeNames[scanResult.scanType]}</Text>
+    <Text style={styles.sectionTitle}>
+      {scanTypeNames[scanResult.scanType]}
+    </Text>
 
     {!isProduct && (
       <>
         <InfoRow
           label="Номер упаковки"
           value={extractContainerNumber(scanResult.label) ?? 'Не указан'}
-        />
-
-        <View style={styles.separator} />
-
-        <InfoRow
-          label="Полная этикетка"
-          value={scanResult.label ?? 'Не указана'}
         />
       </>
     )}

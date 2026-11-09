@@ -23,8 +23,10 @@ export const useHandWorkScreen = ({ onTaskCompleted }: HandWorkScreenProps) => {
   const {
     showAlert,
     hideAlert,
+    alertId,
     alertVisible,
     alertOptions,
+    closeAlert,
   } = useCustomAlert();
 
   const [expectedScan, setExpectedScan] = useState<ExpectedScanType | null>(
@@ -331,7 +333,6 @@ export const useHandWorkScreen = ({ onTaskCompleted }: HandWorkScreenProps) => {
       return;
     }
 
-    // Enter — только разделитель. Сам код берём из поля.
     const trimmedCode = codeRef.current.trim();
 
     if (!trimmedCode) {
@@ -350,19 +351,15 @@ export const useHandWorkScreen = ({ onTaskCompleted }: HandWorkScreenProps) => {
       return;
     }
 
-    // Добавляем код в очередь синхронно.
     const updatedQueue = [...queueRef.current, trimmedCode];
 
     queueRef.current = updatedQueue;
     setRequestQueue(updatedQueue);
 
-    // Очищаем поле сразу после принятия кода.
     clearCodeInput();
 
-    // Сохраняем фокус для следующего сканирования.
     inputRef.current?.focus();
 
-    // Отправка идёт независимо от нового ввода.
     void processQueue();
   };
 
@@ -444,14 +441,24 @@ export const useHandWorkScreen = ({ onTaskCompleted }: HandWorkScreenProps) => {
     setIsCompletingTask(true);
 
     try {
-      await ApiService.completeTask();
+      const isValid = taskPackagingStats?.isValid ?? false;
 
-      if (!mountedRef.current) {
-        return;
-      }
+      showAlert({
+        title: 'Завершение задания',
+        message: isValid
+          ? 'Вы уверены, что хотите завершить задание?'
+          : `Есть ошибки фасовки.
+Завершить задание?`,
+        type: 'error',
+        closeDelay: 3000,
+        confirmText: 'Завершить',
+        cancelText: 'Отмена',
+        onConfirm: () => {
+          closeAlert();
+          completeTask();
+        },
+      });
 
-      setShowCompletionModal(false);
-      onTaskCompleted();
     } catch (error) {
       if (!mountedRef.current) {
         return;
@@ -476,7 +483,19 @@ export const useHandWorkScreen = ({ onTaskCompleted }: HandWorkScreenProps) => {
     }
   };
 
+  const completeTask = async () => {
+    await ApiService.completeTask();
+
+    if (!mountedRef.current) {
+      return;
+    }
+
+    setShowCompletionModal(false);
+    onTaskCompleted();
+  }
+
   return {
+    alertId,
     alertOptions,
     alertVisible,
     code,
@@ -495,6 +514,7 @@ export const useHandWorkScreen = ({ onTaskCompleted }: HandWorkScreenProps) => {
     requestQueue,
     serverStatus,
     serverUrl,
+    pingServer,
     showCompletionModal,
     taskPackagingStats,
     closeCompletionModal: () => setShowCompletionModal(false),
